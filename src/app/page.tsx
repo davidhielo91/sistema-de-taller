@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { formatMoney } from "@/lib/currencies";
 import { STATUS_CONFIG, OrderStatus } from "@/types/order";
 import {
   Monitor,
@@ -40,6 +41,7 @@ interface Settings {
   address: string;
   whatsapp: string;
   logoUrl: string;
+  currency: string;
   schedule: string;
 }
 
@@ -302,7 +304,7 @@ export default function HomePage() {
                   <p className="text-gray-500">Costo Estimado</p>
                   <p className="font-medium text-lg">
                     {order.estimatedCost > 0
-                      ? `$${order.estimatedCost.toLocaleString("es-MX")} MXN`
+                      ? formatMoney(order.estimatedCost, settings?.currency || "MXN")
                       : "Por determinar"}
                   </p>
                 </div>
@@ -348,7 +350,7 @@ export default function HomePage() {
                   <div>
                     <p className="text-gray-500">Costo Estimado</p>
                     <p className="font-medium">
-                      {o.estimatedCost > 0 ? `$${o.estimatedCost.toLocaleString("es-MX")} MXN` : "Por determinar"}
+                      {o.estimatedCost > 0 ? formatMoney(o.estimatedCost, settings?.currency || "MXN") : "Por determinar"}
                     </p>
                   </div>
                   <div>

@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import { ArrowLeft, Save, Copy, Check, Printer, Plus, Trash2, Clock, MessageSquare, MessageCircle, Package } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { formatMoney, formatMoneyShort } from "@/lib/currencies";
 import { SignaturePad } from "@/components/signature-pad";
 import { PhotoUpload } from "@/components/photo-upload";
 
@@ -40,14 +41,17 @@ export default function OrderDetailPage() {
   const [availableParts, setAvailableParts] = useState<{ id: string; name: string; cost: number; stock: number }[]>([]);
   const [selectedPartId, setSelectedPartId] = useState("");
   const [selectedPartQty, setSelectedPartQty] = useState(1);
+  const [currency, setCurrency] = useState("MXN");
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/orders/${id}`).then((res) => { if (!res.ok) throw new Error("Not found"); return res.json(); }),
       fetch("/api/parts").then((res) => res.json()),
-    ]).then(([data, partsData]) => {
+      fetch("/api/settings").then((res) => res.json()),
+    ]).then(([data, partsData, settings]) => {
       setOrder({ ...data, statusHistory: data.statusHistory || [], internalNotes: data.internalNotes || [], usedParts: data.usedParts || [], devicePhotos: data.devicePhotos || [] });
       setAvailableParts(Array.isArray(partsData) ? partsData : []);
+      if (settings?.currency) setCurrency(settings.currency);
       setLoading(false);
     }).catch(() => {
       setError("Orden no encontrada");
@@ -191,7 +195,7 @@ ${order.accessories ? `<div class="row"><span class="label">Accesorios:</span><s
 <div class="row"><span class="label">Problema:</span></div>
 <div>${order.problemDescription}</div>
 ${order.diagnosis ? `<div class="divider"></div><div class="row"><span class="label">Diagnóstico:</span></div><div>${order.diagnosis}</div>` : ""}
-${order.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class="label">Costo Estimado:</span><span class="value">$${order.estimatedCost.toLocaleString("es-MX")} MXN</span></div>` : ""}
+${order.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class="label">Costo Estimado:</span><span class="value">${formatMoney(order.estimatedCost, currency)}</span></div>` : ""}
 <div class="divider"></div>
 <div class="row"><span class="label">Fecha de ingreso:</span><span class="value">${new Date(order.createdAt).toLocaleDateString("es-MX")}</span></div>
 ${deliveryStr ? `<div class="row"><span class="label">Entrega estimada:</span><span class="value">${deliveryStr}</span></div>` : ""}
@@ -355,15 +359,15 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Costo estimado (MXN)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Costo estimado</label>
                 <input type="number" name="estimatedCost" value={order.estimatedCost || ""} onChange={handleChange} className="input-field" min="0" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Costo piezas (MXN)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Costo piezas</label>
                 <input type="number" name="partsCost" value={order.partsCost || ""} onChange={handleChange} className="input-field" min="0" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mano de obra (MXN)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mano de obra</label>
                 <input type="number" name="laborCost" value={order.laborCost || ""} onChange={handleChange} className="input-field" min="0" />
               </div>
             </div>
@@ -371,7 +375,7 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
               <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg text-sm">
                 <span className="text-gray-600">Ganancia:</span>
                 <span className="font-bold text-green-700">
-                  ${((order.estimatedCost || 0) - (order.partsCost || 0) - (order.laborCost || 0)).toLocaleString("es-MX")} MXN
+                  {formatMoney((order.estimatedCost || 0) - (order.partsCost || 0) - (order.laborCost || 0), currency)}
                 </span>
               </div>
             )}
@@ -421,7 +425,7 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
                 <option value="">Seleccionar pieza...</option>
                 {availableParts.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} (${p.cost} — Stock: {p.stock})
+                    {p.name} ({formatMoneyShort(p.cost, currency)} — Stock: {p.stock})
                   </option>
                 ))}
               </select>
@@ -445,7 +449,7 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
                   <div key={up.partId} className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
                     <div className="flex-1">
                       <span className="text-sm font-medium text-gray-900">{up.partName}</span>
-                      <span className="text-xs text-gray-500 ml-2">x{up.quantity} — ${(up.unitCost * up.quantity).toLocaleString("es-MX")}</span>
+                      <span className="text-xs text-gray-500 ml-2">x{up.quantity} — {formatMoneyShort(up.unitCost * up.quantity, currency)}</span>
                     </div>
                     <button onClick={() => removeUsedPart(up.partId)} className="text-gray-300 hover:text-red-500 p-1">
                       <Trash2 className="h-3.5 w-3.5" />
@@ -455,7 +459,7 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
                 <div className="flex justify-between text-sm font-medium pt-2 border-t border-gray-200">
                   <span className="text-gray-600">Total piezas:</span>
                   <span className="text-gray-900">
-                    ${(order.usedParts || []).reduce((s, p) => s + p.unitCost * p.quantity, 0).toLocaleString("es-MX")} MXN
+                    {formatMoney((order.usedParts || []).reduce((s, p) => s + p.unitCost * p.quantity, 0), currency)}
                   </span>
                 </div>
               </div>

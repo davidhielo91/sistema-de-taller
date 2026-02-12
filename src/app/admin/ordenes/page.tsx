@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ServiceOrder, STATUS_CONFIG, OrderStatus } from "@/types/order";
 import Link from "next/link";
 import { Search, Trash2, Eye, Filter, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { formatMoneyShort } from "@/lib/currencies";
 
 const PAGE_SIZE = 20;
 
@@ -13,9 +14,11 @@ export default function OrdenesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [currency, setCurrency] = useState("MXN");
 
   useEffect(() => {
     fetchOrders();
+    fetch("/api/settings").then(r => r.json()).then(s => { if (s?.currency) setCurrency(s.currency); }).catch(() => {});
   }, []);
 
   const fetchOrders = async () => {
@@ -204,7 +207,7 @@ export default function OrdenesPage() {
                   </td>
                   <td className="py-3 px-4 text-gray-700 hidden sm:table-cell">
                     {order.estimatedCost > 0
-                      ? `$${order.estimatedCost.toLocaleString("es-MX")}`
+                      ? formatMoneyShort(order.estimatedCost, currency)
                       : "-"}
                   </td>
                   <td className="py-3 px-4 text-gray-400 text-xs hidden lg:table-cell">

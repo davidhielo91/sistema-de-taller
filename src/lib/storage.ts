@@ -19,6 +19,7 @@ export interface BusinessSettings {
   logoUrl: string;
   brandColor: string;
   lowStockThreshold: number;
+  currency: string;
   schedule: string;
   whatsappTemplateCreated: string;
   whatsappTemplateReady: string;
@@ -115,6 +116,7 @@ export function getSettings(): BusinessSettings {
       logoUrl: "",
       brandColor: "#2563eb",
       lowStockThreshold: 3,
+      currency: "MXN",
       schedule: "Lun - Vie: 9:00 - 18:00\nSábado: 9:00 - 14:00",
       whatsappTemplateCreated: "Hola {nombre}, su equipo {equipo} ha sido recibido. Su número de orden es: {orden}. Le mantendremos informado sobre el progreso.",
       whatsappTemplateReady: "Hola {nombre}, su equipo {equipo} está listo para recoger. Orden: {orden}. ¡Gracias por su preferencia!",

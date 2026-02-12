@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Save, Settings, Download, Database, Lock } from "lucide-react";
+import { CURRENCIES } from "@/lib/currencies";
 
 interface BusinessSettings {
   businessName: string;
@@ -12,6 +13,7 @@ interface BusinessSettings {
   logoUrl: string;
   brandColor: string;
   lowStockThreshold: number;
+  currency: string;
   schedule: string;
   whatsappTemplateCreated: string;
   whatsappTemplateReady: string;
@@ -27,6 +29,7 @@ export default function ConfiguracionPage() {
     logoUrl: "",
     brandColor: "#2563eb",
     lowStockThreshold: 3,
+    currency: "MXN",
     schedule: "",
     whatsappTemplateCreated: "",
     whatsappTemplateReady: "",
@@ -91,7 +94,7 @@ export default function ConfiguracionPage() {
       .catch(() => setLoading(false));
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setSettings((prev) => ({ ...prev, [name]: name === "lowStockThreshold" ? Number(value) : value }));
   };
@@ -267,6 +270,26 @@ export default function ConfiguracionPage() {
                   placeholder="#2563eb"
                 />
               </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Moneda
+              </label>
+              <select
+                name="currency"
+                value={settings.currency || "MXN"}
+                onChange={handleChange}
+                className="input-field"
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.symbol} — {c.name} ({c.code})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                Se usará en precios, reportes y recibos
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

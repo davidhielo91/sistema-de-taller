@@ -3,20 +3,23 @@
 import { useEffect, useState } from "react";
 import { ServiceOrder, STATUS_CONFIG, OrderStatus } from "@/types/order";
 import { BarChart3, TrendingUp, Clock, DollarSign, Calendar } from "lucide-react";
+import { formatMoneyShort } from "@/lib/currencies";
 
 export default function ReportesPage() {
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<"week" | "month" | "year">("month");
+  const [currency, setCurrency] = useState("MXN");
 
   useEffect(() => {
-    fetch("/api/orders")
-      .then((res) => res.json())
-      .then((data) => {
-        setOrders(Array.isArray(data) ? data : []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    Promise.all([
+      fetch("/api/orders").then((r) => r.json()),
+      fetch("/api/settings").then((r) => r.json()),
+    ]).then(([data, settings]) => {
+      setOrders(Array.isArray(data) ? data : []);
+      if (settings?.currency) setCurrency(settings.currency);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   const now = new Date();
@@ -162,7 +165,7 @@ export default function ReportesPage() {
             <div>
               <p className="text-xs text-gray-500">Ingresos Est.</p>
               <p className="text-xl font-bold text-gray-900">
-                ${totalRevenue.toLocaleString("es-MX")}
+                {formatMoneyShort(totalRevenue, currency)}
               </p>
             </div>
           </div>
@@ -295,18 +298,18 @@ export default function ReportesPage() {
           <div className="space-y-3">
             <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
               <span className="text-sm text-gray-600">Ingresos estimados totales</span>
-              <span className="font-bold text-lg">${totalRevenue.toLocaleString("es-MX")}</span>
+              <span className="font-bold text-lg">{formatMoneyShort(totalRevenue, currency)}</span>
             </div>
             <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
               <span className="text-sm text-gray-600">Ingresos entregados</span>
               <span className="font-bold text-lg text-green-700">
-                ${deliveredRevenue.toLocaleString("es-MX")}
+                {formatMoneyShort(deliveredRevenue, currency)}
               </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
               <span className="text-sm text-gray-600">Ticket promedio</span>
               <span className="font-bold text-lg text-blue-700">
-                ${periodOrders.length > 0 ? Math.round(totalRevenue / periodOrders.length).toLocaleString("es-MX") : 0}
+                {formatMoneyShort(periodOrders.length > 0 ? Math.round(totalRevenue / periodOrders.length) : 0, currency)}
               </span>
             </div>
           </div>
@@ -320,22 +323,22 @@ export default function ReportesPage() {
           <div className="space-y-3">
             <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
               <span className="text-sm text-gray-600">Costo de piezas</span>
-              <span className="font-bold text-lg text-red-600">-${totalPartsCost.toLocaleString("es-MX")}</span>
+              <span className="font-bold text-lg text-red-600">-{formatMoneyShort(totalPartsCost, currency)}</span>
             </div>
             <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
               <span className="text-sm text-gray-600">Mano de obra</span>
-              <span className="font-bold text-lg text-orange-600">-${totalLaborCost.toLocaleString("es-MX")}</span>
+              <span className="font-bold text-lg text-orange-600">-{formatMoneyShort(totalLaborCost, currency)}</span>
             </div>
             <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg border-2 border-green-200">
               <span className="text-sm font-medium text-gray-700">Ganancia estimada</span>
               <span className={`font-bold text-xl ${totalProfit >= 0 ? "text-green-700" : "text-red-600"}`}>
-                ${totalProfit.toLocaleString("es-MX")}
+                {formatMoneyShort(totalProfit, currency)}
               </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
               <span className="text-sm text-gray-600">Ganancia entregados</span>
               <span className={`font-bold text-lg ${deliveredProfit >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                ${deliveredProfit.toLocaleString("es-MX")}
+                {formatMoneyShort(deliveredProfit, currency)}
               </span>
             </div>
             {totalRevenue > 0 && (

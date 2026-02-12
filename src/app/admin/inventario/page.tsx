@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Package, Plus, Pencil, Trash2, AlertTriangle, Search, X, Save } from "lucide-react";
+import { formatMoneyShort } from "@/lib/currencies";
 
 interface Part {
   id: string;
@@ -23,6 +24,7 @@ export default function InventarioPage() {
   const [formStock, setFormStock] = useState(0);
   const [saving, setSaving] = useState(false);
   const [lowStockThreshold, setLowStockThreshold] = useState(3);
+  const [currency, setCurrency] = useState("MXN");
 
   useEffect(() => {
     Promise.all([
@@ -31,6 +33,7 @@ export default function InventarioPage() {
     ]).then(([partsData, settings]) => {
       setParts(Array.isArray(partsData) ? partsData : []);
       setLowStockThreshold(settings.lowStockThreshold || 3);
+      if (settings?.currency) setCurrency(settings.currency);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -184,7 +187,7 @@ export default function InventarioPage() {
                       <span className="font-medium text-gray-900">{part.name}</span>
                     </td>
                     <td className="px-4 py-3 text-right text-gray-700">
-                      ${part.cost.toLocaleString("es-MX")}
+                      {formatMoneyShort(part.cost, currency)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span

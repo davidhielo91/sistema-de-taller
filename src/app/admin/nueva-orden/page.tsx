@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEVICE_TYPES, DEVICE_BRANDS, STATUS_CONFIG, ServiceOrder } from "@/types/order";
 import { Save, ArrowLeft, Printer, CheckCircle, Eye, MessageCircle, PlusCircle } from "lucide-react";
+import { formatMoney } from "@/lib/currencies";
 import Link from "next/link";
 import { SignaturePad } from "@/components/signature-pad";
 import { PhotoUpload } from "@/components/photo-upload";
@@ -13,6 +14,7 @@ export default function NuevaOrdenPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [createdOrder, setCreatedOrder] = useState<ServiceOrder | null>(null);
+  const [currency, setCurrency] = useState("MXN");
 
   const [form, setForm] = useState({
     customerName: "",
@@ -75,6 +77,7 @@ export default function NuevaOrdenPage() {
     if (!createdOrder) return;
     const o = createdOrder;
     const s = await fetch("/api/settings").then(r => r.json()).catch(() => ({}));
+    if (s?.currency) setCurrency(s.currency);
     const bName = s.businessName || "Mi Taller";
     const bInfo = [s.address, s.phone].filter(Boolean).join(" | Tel: ");
     const printWindow = window.open("", "_blank");
@@ -101,7 +104,7 @@ ${o.accessories ? `<div class="row"><span class="label">Accesorios:</span><span 
 <div class="divider"></div>
 <div class="row"><span class="label">Problema:</span></div>
 <div>${o.problemDescription}</div>
-${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class="label">Costo Estimado:</span><span class="value">$${o.estimatedCost.toLocaleString("es-MX")} MXN</span></div>` : ""}
+${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class="label">Costo Estimado:</span><span class="value">${formatMoney(o.estimatedCost, currency)}</span></div>` : ""}
 <div class="divider"></div>
 <div class="row"><span class="label">Fecha:</span><span class="value">${new Date(o.createdAt).toLocaleDateString("es-MX")}</span></div>
 <div class="footer"><p>Consulte el estado de su orden en línea con el número de orden mostrado arriba.</p><p>Gracias por su preferencia.</p></div>
@@ -373,7 +376,7 @@ ${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Costo estimado (MXN)
+                  Costo estimado
                 </label>
                 <input
                   type="number"
@@ -387,7 +390,7 @@ ${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Costo de piezas (MXN)
+                  Costo de piezas
                 </label>
                 <input
                   type="number"
@@ -401,7 +404,7 @@ ${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mano de obra (MXN)
+                  Mano de obra
                 </label>
                 <input
                   type="number"
@@ -418,7 +421,7 @@ ${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class
               <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg text-sm">
                 <span className="text-gray-600">Ganancia estimada:</span>
                 <span className="font-bold text-green-700">
-                  ${((form.estimatedCost || 0) - (form.partsCost || 0) - (form.laborCost || 0)).toLocaleString("es-MX")} MXN
+                  {formatMoney((form.estimatedCost || 0) - (form.partsCost || 0) - (form.laborCost || 0), currency)}
                 </span>
               </div>
             )}
