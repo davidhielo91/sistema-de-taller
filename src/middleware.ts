@@ -29,7 +29,8 @@ export function middleware(request: NextRequest) {
   const isProtectedApi =
     ((pathname.startsWith("/api/orders") || pathname.startsWith("/api/settings") || pathname.startsWith("/api/parts")) &&
     request.method !== "GET") ||
-    pathname.startsWith("/api/export");
+    pathname.startsWith("/api/export") ||
+    pathname.startsWith("/api/auth/change-password");
 
   if (isProtectedApi) {
     const session = request.cookies.get(AUTH_COOKIE)?.value;
@@ -42,5 +43,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/orders/:path*", "/api/settings/:path*", "/api/parts/:path*", "/api/export/:path*"],
+  matcher: ["/admin/:path*", "/api/orders/:path*", "/api/settings/:path*", "/api/parts/:path*", "/api/export/:path*", "/api/auth/change-password"],
 };

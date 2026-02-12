@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save, Settings, Download, Database } from "lucide-react";
+import { Save, Settings, Download, Database, Lock } from "lucide-react";
 
 interface BusinessSettings {
   businessName: string;
@@ -35,6 +35,51 @@ export default function ConfiguracionPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+
+  const handleChangePassword = async () => {
+    setPasswordError("");
+    setPasswordSuccess("");
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError("Completa todos los campos");
+      return;
+    }
+    if (newPassword.length < 4) {
+      setPasswordError("La nueva contraseña debe tener al menos 4 caracteres");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Las contraseñas no coinciden");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPasswordError(data.error || "Error al cambiar la contraseña");
+        return;
+      }
+      setPasswordSuccess("Contraseña actualizada correctamente");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setPasswordSuccess(""), 3000);
+    } catch {
+      setPasswordError("Error al cambiar la contraseña");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/settings")
@@ -311,14 +356,65 @@ export default function ConfiguracionPage() {
       </div>
 
       <div className="card">
-        <h3 className="font-semibold text-gray-900 mb-4">Seguridad</h3>
-        <p className="text-sm text-gray-500 mb-4">
-          Para cambiar la contraseña del panel admin, edita el archivo <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">.env.local</code> en el servidor y cambia el valor de <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">ADMIN_PASSWORD</code>.
-        </p>
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <code className="text-xs text-gray-600">
-            ADMIN_PASSWORD=tu_nueva_contraseña
-          </code>
+        <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Lock className="h-4 w-4" />
+          Cambiar Contraseña
+        </h3>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Contraseña actual
+            </label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="input-field"
+              placeholder="••••••••"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nueva contraseña
+            </label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="input-field"
+              placeholder="••••••••"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Confirmar nueva contraseña
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="input-field"
+              placeholder="••••••••"
+            />
+          </div>
+          {passwordError && (
+            <p className="text-sm text-red-600 bg-red-50 p-2 rounded-lg">{passwordError}</p>
+          )}
+          {passwordSuccess && (
+            <p className="text-sm text-green-600 bg-green-50 p-2 rounded-lg">{passwordSuccess}</p>
+          )}
+          <button
+            onClick={handleChangePassword}
+            disabled={changingPassword}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            {changingPassword ? (
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Lock className="h-4 w-4" />
+            )}
+            {changingPassword ? "Cambiando..." : "Cambiar Contraseña"}
+          </button>
         </div>
       </div>
 

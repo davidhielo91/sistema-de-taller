@@ -2,10 +2,13 @@ import { ServiceOrder } from "@/types/order";
 import fs from "fs";
 import path from "path";
 
+import crypto from "crypto";
+
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "orders.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const PARTS_FILE = path.join(DATA_DIR, "parts.json");
+const AUTH_FILE = path.join(DATA_DIR, "auth.json");
 
 export interface BusinessSettings {
   businessName: string;
@@ -37,6 +40,36 @@ export interface UsedPart {
   unitCost: number;
 }
 
+
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(password).digest("hex");
+}
+
+export function getStoredPasswordHash(): string | null {
+  ensureDataDir();
+  if (!fs.existsSync(AUTH_FILE)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(AUTH_FILE, "utf-8"));
+    return data.passwordHash || null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePassword(newPassword: string): void {
+  ensureDataDir();
+  const data = { passwordHash: hashPassword(newPassword), updatedAt: new Date().toISOString() };
+  fs.writeFileSync(AUTH_FILE, JSON.stringify(data, null, 2));
+}
+
+export function verifyStoredPassword(password: string): boolean {
+  const storedHash = getStoredPasswordHash();
+  if (!storedHash) {
+    const envPassword = process.env.ADMIN_PASSWORD || "admin123";
+    return password === envPassword;
+  }
+  return hashPassword(password) === storedHash;
+}
 
 function ensureDataDir() {
   const dir = path.dirname(DATA_FILE);

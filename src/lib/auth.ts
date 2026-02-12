@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import crypto from "crypto";
+import { verifyStoredPassword } from "./storage";
 
 const AUTH_COOKIE = "str_admin_session";
 const SECRET = process.env.AUTH_SECRET || "str-default-secret";
@@ -9,8 +10,7 @@ function hashToken(value: string): string {
 }
 
 export function verifyPassword(password: string): boolean {
-  const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
-  return password === adminPassword;
+  return verifyStoredPassword(password);
 }
 
 export function createSessionToken(): string {
