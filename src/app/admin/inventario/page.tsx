@@ -254,7 +254,7 @@ export default function InventarioPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Costo (MXN)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Costo ({currency})</label>
                   <input
                     type="number"
                     value={formCost || ""}

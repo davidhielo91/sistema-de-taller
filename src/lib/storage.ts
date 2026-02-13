@@ -124,7 +124,22 @@ export function getSettings(): BusinessSettings {
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(defaults, null, 2));
     return defaults;
   }
-  return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
+  const defaults: BusinessSettings = {
+    businessName: "Mi Taller",
+    phone: "",
+    email: "",
+    address: "",
+    whatsapp: "",
+    logoUrl: "",
+    brandColor: "#2563eb",
+    lowStockThreshold: 3,
+    currency: "MXN",
+    schedule: "Lun - Vie: 9:00 - 18:00\nSábado: 9:00 - 14:00",
+    whatsappTemplateCreated: "",
+    whatsappTemplateReady: "",
+  };
+  const stored = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
+  return { ...defaults, ...stored };
 }
 
 export function saveSettings(settings: BusinessSettings): BusinessSettings {
