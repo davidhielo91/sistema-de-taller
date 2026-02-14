@@ -40,11 +40,11 @@ export interface ServiceOrder {
   diagnosis: string;
   estimatedCost: number;
   partsCost: number;
-  laborCost: number;
   estimatedDelivery: string;
   signature: string;
   devicePhotos: string[];
   usedParts: OrderUsedPart[];
+  selectedServices?: { id: string; name: string; basePrice: number; linkedPartId?: string; linkedPartName?: string; linkedPartCost?: number }[];
   status: OrderStatus;
   statusHistory: StatusHistoryEntry[];
   internalNotes: InternalNote[];
@@ -88,6 +88,7 @@ export const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; 
 export const DEVICE_TYPES = [
   "Laptop",
   "PC de Escritorio",
+  "All in One",
   "Tablet",
   "Impresora",
   "Monitor",

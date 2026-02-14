@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DEVICE_TYPES, DEVICE_BRANDS, STATUS_CONFIG, ServiceOrder } from "@/types/order";
-import { Save, ArrowLeft, Printer, CheckCircle, Eye, MessageCircle, PlusCircle } from "lucide-react";
-import { formatMoney } from "@/lib/currencies";
+import { Save, ArrowLeft, Printer, CheckCircle, Eye, MessageCircle, PlusCircle, Plus, Trash2, FileDown, Wrench } from "lucide-react";
+import { formatMoney, formatMoneyShort, getCurrency } from "@/lib/currencies";
 import Link from "next/link";
 import { SignaturePad } from "@/components/signature-pad";
 import { PhotoUpload } from "@/components/photo-upload";
@@ -15,6 +15,34 @@ export default function NuevaOrdenPage() {
   const [error, setError] = useState("");
   const [createdOrder, setCreatedOrder] = useState<ServiceOrder | null>(null);
   const [currency, setCurrency] = useState("MXN");
+  const [availableServices, setAvailableServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
+  const [selectedServices, setSelectedServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/settings").then(r => r.json()),
+      fetch("/api/services").then(r => r.json()).catch(() => []),
+    ]).then(([settings, servicesData]) => {
+      setAvailableServices(Array.isArray(servicesData) ? servicesData : []);
+      if (settings?.currency) setCurrency(settings.currency);
+    }).catch(() => {});
+  }, []);
+
+  const addService = () => {
+    const svc = availableServices.find(s => s.id === selectedServiceId);
+    if (!svc || selectedServices.find(s => s.id === svc.id)) return;
+    setSelectedServices([...selectedServices, svc]);
+    setSelectedServiceId("");
+  };
+
+  const removeService = (id: string) => {
+    setSelectedServices(selectedServices.filter(s => s.id !== id));
+  };
+
+  const servicesTotalPrice = selectedServices.reduce((s, sv) => s + sv.basePrice, 0);
+  const servicesPartsCost = selectedServices.reduce((s, sv) => s + (sv.linkedPartCost || 0), 0);
+  const servicesProfit = servicesTotalPrice - servicesPartsCost;
 
   const [form, setForm] = useState({
     customerName: "",
@@ -27,10 +55,8 @@ export default function NuevaOrdenPage() {
     accessories: "",
     problemDescription: "",
     diagnosis: "",
-    estimatedCost: 0,
-    partsCost: 0,
-    laborCost: 0,
     estimatedDelivery: "",
+    manualCost: 0,
     signature: "",
     devicePhotos: [] as string[],
   });
@@ -39,10 +65,7 @@ export default function NuevaOrdenPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: ["estimatedCost", "partsCost", "laborCost"].includes(name) ? Number(value) : value,
-    }));
+    setForm((prev) => ({ ...prev, [name]: name === "manualCost" ? Number(value) : value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,7 +82,13 @@ export default function NuevaOrdenPage() {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          manualCost: undefined,
+          selectedServices,
+          estimatedCost: selectedServices.length > 0 ? servicesTotalPrice : (form.manualCost || 0),
+          partsCost: selectedServices.length > 0 ? servicesPartsCost : 0,
+        }),
       });
 
       if (!res.ok) throw new Error("Error al guardar");
@@ -104,7 +133,7 @@ ${o.accessories ? `<div class="row"><span class="label">Accesorios:</span><span 
 <div class="divider"></div>
 <div class="row"><span class="label">Problema:</span></div>
 <div>${o.problemDescription}</div>
-${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class="label">Costo Estimado:</span><span class="value">${formatMoney(o.estimatedCost, currency)}</span></div>` : ""}
+${selectedServices.length > 0 ? `<div class="divider"></div><div style="margin:6px 0"><span class="label">Servicios:</span></div>${selectedServices.map(sv => `<div class="row"><span style="font-size:12px">${sv.name}</span><span class="value">${formatMoney(sv.basePrice, currency)}</span></div>`).join("")}<div class="divider"></div><div class="row"><span class="label"><strong>Total:</strong></span><span class="value"><strong>${formatMoney(servicesTotalPrice, currency)}</strong></span></div>` : (o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class="label">Costo Estimado:</span><span class="value">${formatMoney(o.estimatedCost, currency)}</span></div>` : "")}
 <div class="divider"></div>
 <div class="row"><span class="label">Fecha:</span><span class="value">${new Date(o.createdAt).toLocaleDateString("es-MX")}</span></div>
 <div class="footer"><p>Consulte el estado de su orden en línea con el número de orden mostrado arriba.</p><p>Gracias por su preferencia.</p></div>
@@ -119,6 +148,56 @@ ${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class
     printWindow.print();
   };
 
+  const handleSavePDF = async () => {
+    if (!createdOrder) return;
+    const o = createdOrder;
+    const s = await fetch("/api/settings").then(r => r.json()).catch(() => ({}));
+    const cur = s?.currency || currency;
+    const bName = s.businessName || "Mi Taller";
+    const bInfo = [s.address, s.phone].filter(Boolean).join(" | Tel: ");
+
+    const container = document.createElement("div");
+    container.innerHTML = `<div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px;font-size:14px">
+<h1 style="text-align:center;font-size:18px;margin-bottom:4px">${bName}</h1>
+${bInfo ? `<h2 style="text-align:center;font-size:12px;color:#666;font-weight:normal;margin-top:0">${bInfo}</h2>` : ""}
+<div style="border-top:1px dashed #ccc;margin:12px 0"></div>
+<div style="font-size:20px;text-align:center;margin:12px 0;letter-spacing:2px;font-weight:bold">${o.orderNumber}</div>
+<div style="background:#eee;padding:6px 12px;border-radius:4px;text-align:center;font-weight:bold;margin:12px 0">Recibido</div>
+<div style="border-top:1px dashed #ccc;margin:12px 0"></div>
+<div style="display:flex;justify-content:space-between;margin:6px 0"><span style="color:#666">Cliente:</span><span style="font-weight:bold;text-align:right">${o.customerName}</span></div>
+<div style="display:flex;justify-content:space-between;margin:6px 0"><span style="color:#666">Teléfono:</span><span style="font-weight:bold;text-align:right">${o.customerPhone}</span></div>
+<div style="display:flex;justify-content:space-between;margin:6px 0"><span style="color:#666">Equipo:</span><span style="font-weight:bold;text-align:right">${o.deviceBrand} ${o.deviceType}</span></div>
+${o.deviceModel ? `<div style="display:flex;justify-content:space-between;margin:6px 0"><span style="color:#666">Modelo:</span><span style="font-weight:bold;text-align:right">${o.deviceModel}</span></div>` : ""}
+${o.serialNumber ? `<div style="display:flex;justify-content:space-between;margin:6px 0"><span style="color:#666">N/S:</span><span style="font-weight:bold;text-align:right">${o.serialNumber}</span></div>` : ""}
+${o.accessories ? `<div style="display:flex;justify-content:space-between;margin:6px 0"><span style="color:#666">Accesorios:</span><span style="font-weight:bold;text-align:right">${o.accessories}</span></div>` : ""}
+<div style="border-top:1px dashed #ccc;margin:12px 0"></div>
+<div style="margin:6px 0"><span style="color:#666">Problema:</span></div>
+<div>${o.problemDescription}</div>
+${o.estimatedCost > 0 ? `<div style="border-top:1px dashed #ccc;margin:12px 0"></div><div style="display:flex;justify-content:space-between;margin:6px 0"><span style="color:#666">Costo Estimado:</span><span style="font-weight:bold;text-align:right">${formatMoney(o.estimatedCost, cur)}</span></div>` : ""}
+<div style="border-top:1px dashed #ccc;margin:12px 0"></div>
+<div style="display:flex;justify-content:space-between;margin:6px 0"><span style="color:#666">Fecha:</span><span style="font-weight:bold;text-align:right">${new Date(o.createdAt).toLocaleDateString("es-MX")}</span></div>
+<div style="text-align:center;color:#999;font-size:11px;margin-top:20px"><p>Consulte el estado de su orden en línea con el número de orden mostrado arriba.</p><p>Gracias por su preferencia.</p></div>
+<div style="margin-top:16px;padding-top:12px;border-top:1px dashed #ccc;font-size:9px;color:#999;line-height:1.4"><strong>TÉRMINOS Y CONDICIONES:</strong><br>
+1. El equipo no reclamado después de 30 días de notificado como listo se cobrará almacenaje.<br>
+2. La garantía de reparación es de 30 días a partir de la fecha de entrega.<br>
+3. No nos hacemos responsables por datos almacenados en el equipo.<br>
+4. El costo estimado puede variar según el diagnóstico final.<br>
+5. Este comprobante es necesario para recoger el equipo.</div>
+</div>`;
+
+    const html2pdf = (await import("html2pdf.js")).default;
+    html2pdf()
+      .set({
+        margin: 10,
+        filename: `Recibo-${o.orderNumber}.pdf`,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      })
+      .from(container)
+      .save();
+  };
+
   const sendWhatsAppCreated = () => {
     if (!createdOrder) return;
     fetch("/api/settings").then(r => r.json()).then((s) => {
@@ -127,8 +206,9 @@ ${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class
         .replace("{nombre}", createdOrder.customerName)
         .replace("{equipo}", `${createdOrder.deviceBrand} ${createdOrder.deviceType}`)
         .replace("{orden}", createdOrder.orderNumber);
+      const cc = s.countryCode || "52";
       const phone = createdOrder.customerPhone.replace(/\D/g, "");
-      const fullPhone = phone.startsWith("52") ? phone : `52${phone}`;
+      const fullPhone = phone.startsWith(cc) ? phone : `${cc}${phone}`;
       window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(msg)}`, "_blank");
     });
   };
@@ -151,6 +231,13 @@ ${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class
             >
               <Printer className="h-5 w-5" />
               Imprimir Recibo
+            </button>
+            <button
+              onClick={handleSavePDF}
+              className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl font-medium text-white bg-red-500 hover:bg-red-600 transition-colors text-sm shadow-sm"
+            >
+              <FileDown className="h-5 w-5" />
+              Guardar PDF
             </button>
             <button
               onClick={sendWhatsAppCreated}
@@ -373,58 +460,97 @@ ${o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class
                 placeholder="Diagnóstico preliminar (opcional)..."
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Costo estimado
-                </label>
-                <input
-                  type="number"
-                  name="estimatedCost"
-                  value={form.estimatedCost || ""}
-                  onChange={handleChange}
-                  className="input-field"
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Costo de piezas
-                </label>
-                <input
-                  type="number"
-                  name="partsCost"
-                  value={form.partsCost || ""}
-                  onChange={handleChange}
-                  className="input-field"
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mano de obra
-                </label>
-                <input
-                  type="number"
-                  name="laborCost"
-                  value={form.laborCost || ""}
-                  onChange={handleChange}
-                  className="input-field"
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
+            {/* Servicios */}
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Wrench className="h-4 w-4" />
+                Servicios y Costos
+              </h4>
+              {availableServices.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                    <select
+                      value={selectedServiceId}
+                      onChange={(e) => setSelectedServiceId(e.target.value)}
+                      className="input-field flex-1"
+                    >
+                      <option value="">Seleccionar servicio...</option>
+                      {availableServices
+                        .filter(s => !selectedServices.find(ss => ss.id === s.id))
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} — {formatMoneyShort(s.basePrice, currency)}
+                          </option>
+                        ))}
+                    </select>
+                    <button type="button" onClick={addService} disabled={!selectedServiceId} className="btn-primary px-3 shrink-0">
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {selectedServices.length === 0 ? (
+                    <p className="text-sm text-gray-400 py-2">Sin servicios seleccionados (opcional)</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedServices.map((svc) => (
+                        <div key={svc.id} className="flex items-center justify-between bg-purple-50 border border-purple-200 rounded-lg p-3">
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-gray-900">{svc.name}</span>
+                            <span className="text-sm text-purple-600 font-semibold ml-2">{formatMoneyShort(svc.basePrice, currency)}</span>
+                          </div>
+                          <button type="button" onClick={() => removeService(svc.id)} className="text-gray-300 hover:text-red-500 p-1">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-sm font-medium pt-2 border-t border-gray-200">
+                        <span className="text-gray-600">Total servicios:</span>
+                        <span className="text-gray-900">{formatMoney(servicesTotalPrice, currency)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {/* Resumen de costos (auto-calculado desde servicios) */}
+                  {selectedServices.length > 0 && (
+                    <div className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Cobro al cliente:</span>
+                        <span className="font-semibold text-gray-900">{formatMoney(servicesTotalPrice, currency)}</span>
+                      </div>
+                      {servicesPartsCost > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Costo de piezas:</span>
+                          <span className="text-red-600">-{formatMoney(servicesPartsCost, currency)}</span>
+                        </div>
+                      )}
+                      {servicesPartsCost > 0 && (
+                        <div className="flex justify-between text-sm pt-2 border-t border-gray-300">
+                          <span className="font-medium text-gray-700">Ganancia estimada:</span>
+                          <span className="font-bold text-green-700">{formatMoney(servicesProfit, currency)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-400">No hay servicios configurados. Puedes crearlos en <Link href="/admin/configuracion" className="text-primary-600 underline">Configuración</Link>, o ingresa el costo manualmente:</p>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Costo estimado al cliente</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">{getCurrency(currency).symbol}</span>
+                      <input
+                        type="number"
+                        name="manualCost"
+                        value={form.manualCost || ""}
+                        onChange={handleChange}
+                        className="input-field pl-10"
+                        placeholder="0"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            {(form.partsCost > 0 || form.laborCost > 0) && (
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg text-sm">
-                <span className="text-gray-600">Ganancia estimada:</span>
-                <span className="font-bold text-green-700">
-                  {formatMoney((form.estimatedCost || 0) - (form.partsCost || 0) - (form.laborCost || 0), currency)}
-                </span>
-              </div>
-            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Fecha estimada de entrega

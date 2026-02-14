@@ -51,15 +51,10 @@ export default function ReportesPage() {
     0
   );
 
-  const totalLaborCost = periodOrders.reduce(
-    (sum, o) => sum + (o.laborCost || 0),
-    0
-  );
-
-  const totalProfit = totalRevenue - totalPartsCost - totalLaborCost;
+  const totalProfit = totalRevenue - totalPartsCost;
 
   const deliveredProfit = deliveredInPeriod.reduce(
-    (sum, o) => sum + ((o.estimatedCost || 0) - (o.partsCost || 0) - (o.laborCost || 0)),
+    (sum, o) => sum + ((o.estimatedCost || 0) - (o.partsCost || 0)),
     0
   );
 
@@ -309,7 +304,7 @@ export default function ReportesPage() {
             <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
               <span className="text-sm text-gray-600">Ticket promedio</span>
               <span className="font-bold text-lg text-blue-700">
-                {formatMoneyShort(periodOrders.length > 0 ? Math.round(totalRevenue / periodOrders.length) : 0, currency)}
+                {formatMoneyShort((() => { const withCost = periodOrders.filter(o => (o.estimatedCost || 0) > 0); return withCost.length > 0 ? Math.round(totalRevenue / withCost.length) : 0; })(), currency)}
               </span>
             </div>
           </div>
@@ -324,10 +319,6 @@ export default function ReportesPage() {
             <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
               <span className="text-sm text-gray-600">Costo de piezas</span>
               <span className="font-bold text-lg text-red-600">-{formatMoneyShort(totalPartsCost, currency)}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
-              <span className="text-sm text-gray-600">Mano de obra</span>
-              <span className="font-bold text-lg text-orange-600">-{formatMoneyShort(totalLaborCost, currency)}</span>
             </div>
             <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg border-2 border-green-200">
               <span className="text-sm font-medium text-gray-700">Ganancia estimada</span>

@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const dataDir = path.join(process.cwd(), "data");
     const backup: Record<string, unknown> = {};
 
-    const files = ["orders.json", "settings.json", "parts.json"];
+    const files = ["orders.json", "settings.json", "parts.json", "services.json"];
     for (const file of files) {
       const filePath = path.join(dataDir, file);
       try {
@@ -57,7 +57,6 @@ export async function GET(request: NextRequest) {
     "Diagnóstico",
     "Costo Estimado",
     "Costo Repuestos",
-    "Costo Mano de Obra",
     "Entrega Estimada",
     "Notas Internas",
     "Última Actualización",
@@ -88,7 +87,6 @@ export async function GET(request: NextRequest) {
     o.diagnosis || "",
     o.estimatedCost || 0,
     o.partsCost || 0,
-    o.laborCost || 0,
     o.estimatedDelivery || "",
     Array.isArray(o.internalNotes) ? o.internalNotes.map((n) => n.text).join(" | ") : "",
     new Date(o.updatedAt).toLocaleDateString("es-MX"),

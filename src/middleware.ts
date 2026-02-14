@@ -27,7 +27,7 @@ export function middleware(request: NextRequest) {
 
   // Protect write API routes (POST, PUT, DELETE)
   const isProtectedApi =
-    ((pathname.startsWith("/api/orders") || pathname.startsWith("/api/settings") || pathname.startsWith("/api/parts")) &&
+    ((pathname.startsWith("/api/orders") || pathname.startsWith("/api/settings") || pathname.startsWith("/api/parts") || pathname.startsWith("/api/services")) &&
     request.method !== "GET") ||
     pathname.startsWith("/api/export") ||
     pathname.startsWith("/api/auth/change-password");
@@ -43,5 +43,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/orders/:path*", "/api/settings/:path*", "/api/parts/:path*", "/api/export/:path*", "/api/auth/change-password"],
+  matcher: ["/admin/:path*", "/api/orders/:path*", "/api/settings/:path*", "/api/parts/:path*", "/api/services/:path*", "/api/export/:path*", "/api/auth/change-password"],
 };

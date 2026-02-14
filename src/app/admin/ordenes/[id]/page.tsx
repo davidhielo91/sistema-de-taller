@@ -9,10 +9,9 @@ import {
   DEVICE_TYPES,
   DEVICE_BRANDS,
   InternalNote,
-  OrderUsedPart,
 } from "@/types/order";
 import Link from "next/link";
-import { ArrowLeft, Save, Copy, Check, Printer, Plus, Trash2, Clock, MessageSquare, MessageCircle, Package } from "lucide-react";
+import { ArrowLeft, Save, Copy, Check, Printer, Plus, Trash2, Clock, MessageSquare, MessageCircle, Wrench } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { formatMoney, formatMoneyShort } from "@/lib/currencies";
 import { SignaturePad } from "@/components/signature-pad";
@@ -38,19 +37,20 @@ export default function OrderDetailPage() {
   const [success, setSuccess] = useState("");
   const [copied, setCopied] = useState(false);
   const [newNote, setNewNote] = useState("");
-  const [availableParts, setAvailableParts] = useState<{ id: string; name: string; cost: number; stock: number }[]>([]);
-  const [selectedPartId, setSelectedPartId] = useState("");
-  const [selectedPartQty, setSelectedPartQty] = useState(1);
   const [currency, setCurrency] = useState("MXN");
+  const [availableServices, setAvailableServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
+  const [selectedServices, setSelectedServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState("");
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/orders/${id}`).then((res) => { if (!res.ok) throw new Error("Not found"); return res.json(); }),
-      fetch("/api/parts").then((res) => res.json()),
       fetch("/api/settings").then((res) => res.json()),
-    ]).then(([data, partsData, settings]) => {
+      fetch("/api/services").then((res) => res.json()).catch(() => []),
+    ]).then(([data, settings, servicesData]) => {
       setOrder({ ...data, statusHistory: data.statusHistory || [], internalNotes: data.internalNotes || [], usedParts: data.usedParts || [], devicePhotos: data.devicePhotos || [] });
-      setAvailableParts(Array.isArray(partsData) ? partsData : []);
+      setAvailableServices(Array.isArray(servicesData) ? servicesData : []);
+      if (data.selectedServices) setSelectedServices(data.selectedServices);
       if (settings?.currency) setCurrency(settings.currency);
       setLoading(false);
     }).catch(() => {
@@ -59,6 +59,23 @@ export default function OrderDetailPage() {
     });
   }, [id]);
 
+  const addServiceToOrder = () => {
+    if (!order) return;
+    const svc = availableServices.find(s => s.id === selectedServiceId);
+    if (!svc || selectedServices.find(s => s.id === svc.id)) return;
+    const updated = [...selectedServices, svc];
+    setSelectedServices(updated);
+    setSelectedServiceId("");
+  };
+
+  const removeServiceFromOrder = (svcId: string) => {
+    if (!order) return;
+    setSelectedServices(selectedServices.filter(s => s.id !== svcId));
+  };
+
+  const servicesTotalPrice = selectedServices.reduce((s, sv) => s + sv.basePrice, 0);
+  const servicesPartsCost = selectedServices.reduce((s, sv) => s + (sv.linkedPartCost || 0), 0);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
@@ -66,7 +83,7 @@ export default function OrderDetailPage() {
     const { name, value } = e.target;
     setOrder({
       ...order,
-      [name]: ["estimatedCost", "partsCost", "laborCost"].includes(name) ? Number(value) : value,
+      [name]: value,
     });
   };
 
@@ -94,28 +111,6 @@ export default function OrderDetailPage() {
     });
   };
 
-  const addUsedPart = () => {
-    if (!order || !selectedPartId) return;
-    const part = availableParts.find((p) => p.id === selectedPartId);
-    if (!part) return;
-    const existing = (order.usedParts || []).find((p) => p.partId === selectedPartId);
-    let updated: OrderUsedPart[];
-    if (existing) {
-      updated = (order.usedParts || []).map((p) =>
-        p.partId === selectedPartId ? { ...p, quantity: p.quantity + selectedPartQty } : p
-      );
-    } else {
-      updated = [...(order.usedParts || []), { partId: part.id, partName: part.name, quantity: selectedPartQty, unitCost: part.cost }];
-    }
-    setOrder({ ...order, usedParts: updated });
-    setSelectedPartId("");
-    setSelectedPartQty(1);
-  };
-
-  const removeUsedPart = (partId: string) => {
-    if (!order) return;
-    setOrder({ ...order, usedParts: (order.usedParts || []).filter((p) => p.partId !== partId) });
-  };
 
   const handleSave = async () => {
     if (!order) return;
@@ -127,7 +122,11 @@ export default function OrderDetailPage() {
       const res = await fetch(`/api/orders/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order),
+        body: JSON.stringify({
+          ...order,
+          selectedServices,
+          ...(selectedServices.length > 0 ? { estimatedCost: servicesTotalPrice, partsCost: servicesPartsCost } : {}),
+        }),
       });
 
       if (!res.ok) throw new Error("Error");
@@ -158,8 +157,9 @@ export default function OrderDetailPage() {
         .replace("{nombre}", order.customerName)
         .replace("{equipo}", `${order.deviceBrand} ${order.deviceType}`)
         .replace("{orden}", order.orderNumber);
+      const cc = s.countryCode || "52";
       const phone = order.customerPhone.replace(/\D/g, "");
-      const fullPhone = phone.startsWith("52") ? phone : `52${phone}`;
+      const fullPhone = phone.startsWith(cc) ? phone : `${cc}${phone}`;
       window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(msg)}`, "_blank");
     });
   };
@@ -195,7 +195,7 @@ ${order.accessories ? `<div class="row"><span class="label">Accesorios:</span><s
 <div class="row"><span class="label">Problema:</span></div>
 <div>${order.problemDescription}</div>
 ${order.diagnosis ? `<div class="divider"></div><div class="row"><span class="label">Diagnóstico:</span></div><div>${order.diagnosis}</div>` : ""}
-${order.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class="label">Costo Estimado:</span><span class="value">${formatMoney(order.estimatedCost, currency)}</span></div>` : ""}
+${selectedServices.length > 0 ? `<div class="divider"></div><div style="margin:6px 0"><span class="label">Servicios:</span></div>${selectedServices.map(sv => `<div class="row"><span style="font-size:12px">${sv.name}</span><span class="value">${formatMoney(sv.basePrice, currency)}</span></div>`).join("")}<div class="divider"></div><div class="row"><span class="label"><strong>Total:</strong></span><span class="value"><strong>${formatMoney(servicesTotalPrice, currency)}</strong></span></div>` : (order.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class="label">Costo Estimado:</span><span class="value">${formatMoney(order.estimatedCost, currency)}</span></div>` : "")}
 <div class="divider"></div>
 <div class="row"><span class="label">Fecha de ingreso:</span><span class="value">${new Date(order.createdAt).toLocaleDateString("es-MX")}</span></div>
 ${deliveryStr ? `<div class="row"><span class="label">Entrega estimada:</span><span class="value">${deliveryStr}</span></div>` : ""}
@@ -357,26 +357,76 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
               <label className="block text-sm font-medium text-gray-700 mb-1">Accesorios recibidos</label>
               <input type="text" name="accessories" value={order.accessories || ""} onChange={handleChange} className="input-field" placeholder="Cargador, mouse, funda, etc." />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Servicios */}
+            {availableServices.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Costo estimado</label>
-                <input type="number" name="estimatedCost" value={order.estimatedCost || ""} onChange={handleChange} className="input-field" min="0" />
+                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Wrench className="h-4 w-4" />
+                  Servicios
+                </h4>
+                <div className="space-y-3">
+                  <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                    <select value={selectedServiceId} onChange={(e) => setSelectedServiceId(e.target.value)} className="input-field flex-1">
+                      <option value="">Seleccionar servicio...</option>
+                      {availableServices.filter(s => !selectedServices.find(ss => ss.id === s.id)).map((s) => (
+                        <option key={s.id} value={s.id}>{s.name} — {formatMoneyShort(s.basePrice, currency)}</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={addServiceToOrder} disabled={!selectedServiceId} className="btn-primary px-3 shrink-0">
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {selectedServices.length === 0 ? (
+                    <p className="text-sm text-gray-400 py-2">Sin servicios seleccionados</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedServices.map((svc) => (
+                        <div key={svc.id} className="flex items-center justify-between bg-purple-50 border border-purple-200 rounded-lg p-3">
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-gray-900">{svc.name}</span>
+                            <span className="text-sm text-purple-600 font-semibold ml-2">{formatMoneyShort(svc.basePrice, currency)}</span>
+                          </div>
+                          <button type="button" onClick={() => removeServiceFromOrder(svc.id)} className="text-gray-300 hover:text-red-500 p-1">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-sm font-medium pt-2 border-t border-gray-200">
+                        <span className="text-gray-600">Total servicios:</span>
+                        <span className="text-gray-900">{formatMoney(servicesTotalPrice, currency)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Costo piezas</label>
-                <input type="number" name="partsCost" value={order.partsCost || ""} onChange={handleChange} className="input-field" min="0" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mano de obra</label>
-                <input type="number" name="laborCost" value={order.laborCost || ""} onChange={handleChange} className="input-field" min="0" />
-              </div>
-            </div>
-            {((order.partsCost || 0) > 0 || (order.laborCost || 0) > 0) && (
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg text-sm">
-                <span className="text-gray-600">Ganancia:</span>
-                <span className="font-bold text-green-700">
-                  {formatMoney((order.estimatedCost || 0) - (order.partsCost || 0) - (order.laborCost || 0), currency)}
-                </span>
+            )}
+
+            {/* Resumen de costos */}
+            {(selectedServices.length > 0 || (order.estimatedCost || 0) > 0) && (
+              <div className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Cobro al cliente:</span>
+                  <span className="font-semibold text-gray-900">{formatMoney(selectedServices.length > 0 ? servicesTotalPrice : (order.estimatedCost || 0), currency)}</span>
+                </div>
+                {((selectedServices.length > 0 ? servicesPartsCost : (order.partsCost || 0)) > 0) && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Costo de piezas:</span>
+                      <span className="text-red-600">-{formatMoney(selectedServices.length > 0 ? servicesPartsCost : (order.partsCost || 0), currency)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-2 border-t border-gray-300">
+                      <span className="font-medium text-gray-700">Ganancia:</span>
+                      <span className="font-bold text-green-700">
+                        {formatMoney(
+                          selectedServices.length > 0
+                            ? servicesTotalPrice - servicesPartsCost
+                            : (order.estimatedCost || 0) - (order.partsCost || 0),
+                          currency
+                        )}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             )}
             <div>
@@ -409,63 +459,6 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
           />
         </div>
 
-        {/* Used Parts */}
-        <div className="card lg:col-span-2">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Piezas Utilizadas
-          </h3>
-          <div className="space-y-3">
-            <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-              <select
-                value={selectedPartId}
-                onChange={(e) => setSelectedPartId(e.target.value)}
-                className="input-field flex-1"
-              >
-                <option value="">Seleccionar pieza...</option>
-                {availableParts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({formatMoneyShort(p.cost, currency)} — Stock: {p.stock})
-                  </option>
-                ))}
-              </select>
-              <input
-                type="number"
-                value={selectedPartQty}
-                onChange={(e) => setSelectedPartQty(Math.max(1, Number(e.target.value)))}
-                className="input-field w-20"
-                min="1"
-                placeholder="Cant."
-              />
-              <button onClick={addUsedPart} disabled={!selectedPartId} className="btn-primary px-3 shrink-0">
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
-            {(order.usedParts || []).length === 0 ? (
-              <p className="text-sm text-gray-400 py-2">Sin piezas asignadas</p>
-            ) : (
-              <div className="space-y-2">
-                {(order.usedParts || []).map((up) => (
-                  <div key={up.partId} className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <div className="flex-1">
-                      <span className="text-sm font-medium text-gray-900">{up.partName}</span>
-                      <span className="text-xs text-gray-500 ml-2">x{up.quantity} — {formatMoneyShort(up.unitCost * up.quantity, currency)}</span>
-                    </div>
-                    <button onClick={() => removeUsedPart(up.partId)} className="text-gray-300 hover:text-red-500 p-1">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-                <div className="flex justify-between text-sm font-medium pt-2 border-t border-gray-200">
-                  <span className="text-gray-600">Total piezas:</span>
-                  <span className="text-gray-900">
-                    {formatMoney((order.usedParts || []).reduce((s, p) => s + p.unitCost * p.quantity, 0), currency)}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Internal Notes */}
         <div className="card lg:col-span-2">

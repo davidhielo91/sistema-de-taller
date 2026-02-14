@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save, Settings, Download, Database, Lock } from "lucide-react";
-import { CURRENCIES } from "@/lib/currencies";
+import { Save, Settings } from "lucide-react";
+import { CURRENCIES, getCurrency } from "@/lib/currencies";
 
 interface BusinessSettings {
   businessName: string;
@@ -17,6 +17,7 @@ interface BusinessSettings {
   schedule: string;
   whatsappTemplateCreated: string;
   whatsappTemplateReady: string;
+  countryCode: string;
 }
 
 export default function ConfiguracionPage() {
@@ -33,65 +34,18 @@ export default function ConfiguracionPage() {
     schedule: "",
     whatsappTemplateCreated: "",
     whatsappTemplateReady: "",
+    countryCode: "52",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState("");
-
-  const handleChangePassword = async () => {
-    setPasswordError("");
-    setPasswordSuccess("");
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setPasswordError("Completa todos los campos");
-      return;
-    }
-    if (newPassword.length < 4) {
-      setPasswordError("La nueva contraseña debe tener al menos 4 caracteres");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError("Las contraseñas no coinciden");
-      return;
-    }
-    setChangingPassword(true);
-    try {
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setPasswordError(data.error || "Error al cambiar la contraseña");
-        return;
-      }
-      setPasswordSuccess("Contraseña actualizada correctamente");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setTimeout(() => setPasswordSuccess(""), 3000);
-    } catch {
-      setPasswordError("Error al cambiar la contraseña");
-    } finally {
-      setChangingPassword(false);
-    }
-  };
 
   useEffect(() => {
-    fetch("/api/settings")
-      .then((res) => res.json())
-      .then((data) => {
-        setSettings(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    fetch("/api/settings").then((r) => r.json()).then((data) => {
+      setSettings(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -197,18 +151,31 @@ export default function ConfiguracionPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Número de WhatsApp (con código de país, sin +)
+              Código de país (para WhatsApp)
             </label>
-            <input
-              type="text"
-              name="whatsapp"
-              value={settings.whatsapp}
-              onChange={handleChange}
-              className="input-field"
-              placeholder="521234567890"
-            />
+            <div className="flex gap-2">
+              <div className="relative w-24 shrink-0">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">+</span>
+                <input
+                  type="text"
+                  name="countryCode"
+                  value={settings.countryCode}
+                  onChange={handleChange}
+                  className="input-field pl-7"
+                  placeholder="52"
+                />
+              </div>
+              <input
+                type="text"
+                name="whatsapp"
+                value={settings.whatsapp}
+                onChange={handleChange}
+                className="input-field flex-1"
+                placeholder="Número de WhatsApp"
+              />
+            </div>
             <p className="text-xs text-gray-400 mt-1">
-              Ejemplo: 521234567890 (52 = México, seguido del número)
+              Ej: +52 para México, +1 para USA, +57 para Colombia
             </p>
           </div>
           <div>
@@ -344,100 +311,6 @@ export default function ConfiguracionPage() {
               placeholder="Hola {nombre}, su equipo {equipo} está listo para recoger..."
             />
           </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Database className="h-5 w-5" />
-          Respaldo de Información
-        </h3>
-        <p className="text-sm text-gray-500 mb-4">
-          Descarga un respaldo de todas las órdenes de servicio, configuración y partes del inventario.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <a
-            href="/api/export?format=csv"
-            download
-            className="flex items-center justify-center gap-2 px-4 py-3 bg-green-50 text-green-700 rounded-lg border border-green-200 hover:bg-green-100 transition-colors font-medium text-sm"
-          >
-            <Download className="h-4 w-4" />
-            Exportar Órdenes (Excel/CSV)
-          </a>
-          <a
-            href="/api/export?format=json"
-            download
-            className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors font-medium text-sm"
-          >
-            <Download className="h-4 w-4" />
-            Backup Completo (JSON)
-          </a>
-        </div>
-        <p className="text-xs text-gray-400 mt-3">
-          El archivo CSV se abre directamente en Excel. El archivo JSON incluye toda la información del sistema (órdenes, configuración e inventario).
-        </p>
-      </div>
-
-      <div className="card">
-        <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Lock className="h-4 w-4" />
-          Cambiar Contraseña
-        </h3>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Contraseña actual
-            </label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="input-field"
-              placeholder="••••••••"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nueva contraseña
-            </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="input-field"
-              placeholder="••••••••"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Confirmar nueva contraseña
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="input-field"
-              placeholder="••••••••"
-            />
-          </div>
-          {passwordError && (
-            <p className="text-sm text-red-600 bg-red-50 p-2 rounded-lg">{passwordError}</p>
-          )}
-          {passwordSuccess && (
-            <p className="text-sm text-green-600 bg-green-50 p-2 rounded-lg">{passwordSuccess}</p>
-          )}
-          <button
-            onClick={handleChangePassword}
-            disabled={changingPassword}
-            className="btn-primary flex items-center gap-2 text-sm"
-          >
-            {changingPassword ? (
-              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Lock className="h-4 w-4" />
-            )}
-            {changingPassword ? "Cambiando..." : "Cambiar Contraseña"}
-          </button>
         </div>
       </div>
 

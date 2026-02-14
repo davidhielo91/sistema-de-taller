@@ -9,6 +9,7 @@ const DATA_FILE = path.join(DATA_DIR, "orders.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const PARTS_FILE = path.join(DATA_DIR, "parts.json");
 const AUTH_FILE = path.join(DATA_DIR, "auth.json");
+const SERVICES_FILE = path.join(DATA_DIR, "services.json");
 
 export interface BusinessSettings {
   businessName: string;
@@ -23,6 +24,7 @@ export interface BusinessSettings {
   schedule: string;
   whatsappTemplateCreated: string;
   whatsappTemplateReady: string;
+  countryCode: string;
 }
 
 export interface Part {
@@ -120,6 +122,7 @@ export function getSettings(): BusinessSettings {
       schedule: "Lun - Vie: 9:00 - 18:00\nSábado: 9:00 - 14:00",
       whatsappTemplateCreated: "Hola {nombre}, su equipo {equipo} ha sido recibido. Su número de orden es: {orden}. Le mantendremos informado sobre el progreso.",
       whatsappTemplateReady: "Hola {nombre}, su equipo {equipo} está listo para recoger. Orden: {orden}. ¡Gracias por su preferencia!",
+      countryCode: "52",
     };
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(defaults, null, 2));
     return defaults;
@@ -137,6 +140,7 @@ export function getSettings(): BusinessSettings {
     schedule: "Lun - Vie: 9:00 - 18:00\nSábado: 9:00 - 14:00",
     whatsappTemplateCreated: "",
     whatsappTemplateReady: "",
+    countryCode: "52",
   };
   const stored = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
   return { ...defaults, ...stored };
@@ -173,8 +177,13 @@ export function generateOrderNumber(): string {
   const now = new Date();
   const prefix = `ORD-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
   const existing = orders.filter((o) => o.orderNumber.startsWith(prefix));
-  const nextNum = existing.length + 1;
-  return `${prefix}-${String(nextNum).padStart(4, "0")}`;
+  let maxNum = 0;
+  for (const o of existing) {
+    const parts = o.orderNumber.split("-");
+    const num = parseInt(parts[parts.length - 1], 10);
+    if (num > maxNum) maxNum = num;
+  }
+  return `${prefix}-${String(maxNum + 1).padStart(4, "0")}`;
 }
 
 // ─── Parts Inventory ───
@@ -209,6 +218,48 @@ export function deletePart(id: string): boolean {
   const filtered = parts.filter((p) => p.id !== id);
   if (filtered.length === parts.length) return false;
   fs.writeFileSync(PARTS_FILE, JSON.stringify(filtered, null, 2));
+  return true;
+}
+
+// ─── Services Catalog ───
+
+export interface RepairService {
+  id: string;
+  name: string;
+  basePrice: number;
+  linkedPartId?: string;
+  linkedPartName?: string;
+  linkedPartCost?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function getServices(): RepairService[] {
+  ensureDataDir();
+  if (!fs.existsSync(SERVICES_FILE)) {
+    fs.writeFileSync(SERVICES_FILE, JSON.stringify([], null, 2));
+    return [];
+  }
+  return JSON.parse(fs.readFileSync(SERVICES_FILE, "utf-8"));
+}
+
+export function saveService(service: RepairService): RepairService {
+  const services = getServices();
+  const index = services.findIndex((s) => s.id === service.id);
+  if (index >= 0) {
+    services[index] = service;
+  } else {
+    services.push(service);
+  }
+  fs.writeFileSync(SERVICES_FILE, JSON.stringify(services, null, 2));
+  return service;
+}
+
+export function deleteService(id: string): boolean {
+  const services = getServices();
+  const filtered = services.filter((s) => s.id !== id);
+  if (filtered.length === services.length) return false;
+  fs.writeFileSync(SERVICES_FILE, JSON.stringify(filtered, null, 2));
   return true;
 }
 
