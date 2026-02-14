@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
       status: "recibido",
       statusHistory: [],
       internalNotes: [],
+      budgetStatus: "none",
       createdAt: now,
       updatedAt: now,
     };

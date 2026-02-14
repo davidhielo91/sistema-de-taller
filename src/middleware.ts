@@ -25,6 +25,16 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // Client portal routes (use their own token validation)
+  const isClientRoute =
+    pathname === "/api/orders/verify" ||
+    pathname.startsWith("/api/orders/portal/") ||
+    (pathname.match(/\/api\/orders\/[^/]+\/budget/) && request.method === "POST");
+
+  if (isClientRoute) {
+    return NextResponse.next();
+  }
+
   // Protect write API routes (POST, PUT, DELETE)
   const isProtectedApi =
     ((pathname.startsWith("/api/orders") || pathname.startsWith("/api/settings") || pathname.startsWith("/api/parts") || pathname.startsWith("/api/services")) &&

@@ -48,6 +48,11 @@ export interface ServiceOrder {
   status: OrderStatus;
   statusHistory: StatusHistoryEntry[];
   internalNotes: InternalNote[];
+  budgetStatus: "none" | "pending" | "approved" | "rejected";
+  budgetSentAt?: string;
+  budgetRespondedAt?: string;
+  budgetNote?: string;
+  clientNote?: string;
   createdAt: string;
   updatedAt: string;
 }

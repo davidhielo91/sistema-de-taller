@@ -68,8 +68,8 @@ export function savePassword(newPassword: string): void {
 export function verifyStoredPassword(password: string): boolean {
   const storedHash = getStoredPasswordHash();
   if (!storedHash) {
-    const envPassword = process.env.ADMIN_PASSWORD || "admin123";
-    return password === envPassword;
+    const envPassword = (process.env.ADMIN_PASSWORD || "admin123").trim();
+    return password.trim() === envPassword;
   }
   return hashPassword(password) === storedHash;
 }

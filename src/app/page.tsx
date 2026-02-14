@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/currencies";
 import { STATUS_CONFIG, OrderStatus } from "@/types/order";
 import {
@@ -10,6 +11,9 @@ import {
   CheckCircle,
   Hash,
   ArrowLeft,
+  Eye,
+  Shield,
+  AlertCircle,
 } from "lucide-react";
 
 interface PublicOrder {
@@ -24,6 +28,7 @@ interface PublicOrder {
   estimatedCost: number;
   estimatedDelivery: string;
   status: OrderStatus;
+  budgetStatus?: "none" | "pending" | "approved" | "rejected";
   createdAt: string;
   updatedAt: string;
 }
@@ -48,6 +53,7 @@ const STATUS_STEPS: OrderStatus[] = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [searchType, setSearchType] = useState<"order" | "phone">("order");
   const [order, setOrder] = useState<PublicOrder | null>(null);
@@ -55,6 +61,33 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [showVerify, setShowVerify] = useState<string | null>(null);
+  const [verifyPhone, setVerifyPhone] = useState("");
+  const [verifyError, setVerifyError] = useState("");
+  const [verifying, setVerifying] = useState(false);
+
+  const handleVerifyPortal = async (orderNum: string) => {
+    if (!verifyPhone.trim()) { setVerifyError("Ingresa tu teléfono"); return; }
+    setVerifying(true);
+    setVerifyError("");
+    try {
+      const res = await fetch("/api/orders/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderNumber: orderNum, phone: verifyPhone.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setVerifyError(data.error || "Error de verificación");
+        return;
+      }
+      router.push(`/orden/${orderNum}`);
+    } catch {
+      setVerifyError("Error de conexión");
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then(setSettings).catch(() => {});
@@ -282,6 +315,24 @@ export default function HomePage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Portal Access Button */}
+                <div className="mt-5 pt-4 border-t border-gray-100">
+                  {order.budgetStatus === "pending" && (
+                    <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                      <p className="text-xs text-amber-700 font-medium">Tienes un presupuesto pendiente de aprobación</p>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => { setShowVerify(order.orderNumber); setVerifyPhone(""); setVerifyError(""); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-700 transition-colors text-sm"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Ver Portal Completo
+                  </button>
+                  <p className="text-[10px] text-gray-400 text-center mt-2">Fotos, historial y aprobación de presupuesto</p>
+                </div>
               </div>
             </div>
           )}
@@ -321,6 +372,13 @@ export default function HomePage() {
                         </p>
                       </div>
                     </div>
+                    <button
+                      onClick={() => { setShowVerify(o.orderNumber); setVerifyPhone(query); setVerifyError(""); }}
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 transition-colors"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Ver Portal
+                    </button>
                   </div>
                 ))}
               </div>
@@ -328,6 +386,56 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      {/* Verification Modal */}
+      {showVerify && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setShowVerify(null)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-primary-100 p-2.5 rounded-xl">
+                <Shield className="h-5 w-5 text-primary-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">Verificar identidad</h3>
+                <p className="text-xs text-gray-500">Ingresa tu teléfono para acceder</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mb-3">Orden: <span className="font-mono font-semibold text-gray-700">{showVerify}</span></p>
+            <input
+              type="tel"
+              value={verifyPhone}
+              onChange={(e) => setVerifyPhone(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleVerifyPortal(showVerify)}
+              placeholder="Teléfono registrado"
+              className="input-field text-center mb-3"
+              autoFocus
+            />
+            {verifyError && (
+              <p className="text-xs text-red-600 bg-red-50 p-2 rounded-lg mb-3 text-center">{verifyError}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowVerify(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleVerifyPortal(showVerify)}
+                disabled={verifying}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {verifying ? (
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+                Acceder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Minimal Footer */}
       <div className="py-4 text-center text-xs text-gray-300">

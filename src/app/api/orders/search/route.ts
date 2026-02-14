@@ -15,6 +15,7 @@ function publicOrderData(order: ServiceOrder) {
     estimatedCost: order.estimatedCost,
     estimatedDelivery: order.estimatedDelivery || "",
     status: order.status,
+    budgetStatus: order.budgetStatus || "none",
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };

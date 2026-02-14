@@ -11,7 +11,7 @@ import {
   InternalNote,
 } from "@/types/order";
 import Link from "next/link";
-import { ArrowLeft, Save, Copy, Check, Printer, Plus, Trash2, Clock, MessageSquare, MessageCircle, Wrench } from "lucide-react";
+import { ArrowLeft, Save, Copy, Check, Printer, Plus, Trash2, Clock, MessageSquare, MessageCircle, Wrench, FileText, Send, ThumbsUp, ThumbsDown } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { formatMoney, formatMoneyShort } from "@/lib/currencies";
 import { SignaturePad } from "@/components/signature-pad";
@@ -38,6 +38,8 @@ export default function OrderDetailPage() {
   const [copied, setCopied] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [currency, setCurrency] = useState("MXN");
+  const [budgetNote, setBudgetNote] = useState("");
+  const [sendingBudget, setSendingBudget] = useState(false);
   const [availableServices, setAvailableServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
   const [selectedServices, setSelectedServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState("");
@@ -48,7 +50,7 @@ export default function OrderDetailPage() {
       fetch("/api/settings").then((res) => res.json()),
       fetch("/api/services").then((res) => res.json()).catch(() => []),
     ]).then(([data, settings, servicesData]) => {
-      setOrder({ ...data, statusHistory: data.statusHistory || [], internalNotes: data.internalNotes || [], usedParts: data.usedParts || [], devicePhotos: data.devicePhotos || [] });
+      setOrder({ ...data, statusHistory: data.statusHistory || [], internalNotes: data.internalNotes || [], usedParts: data.usedParts || [], devicePhotos: data.devicePhotos || [], budgetStatus: data.budgetStatus || "none" });
       setAvailableServices(Array.isArray(servicesData) ? servicesData : []);
       if (data.selectedServices) setSelectedServices(data.selectedServices);
       if (settings?.currency) setCurrency(settings.currency);
@@ -162,6 +164,49 @@ export default function OrderDetailPage() {
       const fullPhone = phone.startsWith(cc) ? phone : `${cc}${phone}`;
       window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(msg)}`, "_blank");
     });
+  };
+
+  const sendBudget = async () => {
+    if (!order) return;
+    setSendingBudget(true);
+    try {
+      const cost = selectedServices.length > 0 ? servicesTotalPrice : (order.estimatedCost || 0);
+      if (cost <= 0) {
+        setError("Agrega servicios o un costo estimado antes de enviar el presupuesto");
+        setSendingBudget(false);
+        return;
+      }
+      const res = await fetch(`/api/orders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...order,
+          selectedServices,
+          ...(selectedServices.length > 0 ? { estimatedCost: servicesTotalPrice, partsCost: servicesPartsCost } : {}),
+          budgetStatus: "pending",
+          budgetSentAt: new Date().toISOString(),
+          budgetNote: budgetNote.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setOrder({ ...updated, statusHistory: updated.statusHistory || [], internalNotes: updated.internalNotes || [] });
+        setSuccess("Presupuesto enviado al portal del cliente");
+        setBudgetNote("");
+        setTimeout(() => setSuccess(""), 3000);
+        // Send WhatsApp with portal link
+        const s = await fetch("/api/settings").then(r => r.json()).catch(() => ({}));
+        const cc = s.countryCode || "52";
+        const phone = order.customerPhone.replace(/\D/g, "");
+        const fullPhone = phone.startsWith(cc) ? phone : `${cc}${phone}`;
+        const msg = `Hola ${order.customerName}, hemos preparado un presupuesto para tu equipo ${order.deviceBrand} ${order.deviceType}. Por favor revisa y aprueba desde nuestro portal consultando tu orden: ${order.orderNumber}`;
+        window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(msg)}`, "_blank");
+      }
+    } catch {
+      setError("Error al enviar presupuesto");
+    } finally {
+      setSendingBudget(false);
+    }
   };
 
   const handlePrint = async () => {
@@ -302,6 +347,79 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
           })}
         </div>
       </div>
+
+      {/* Budget Status */}
+      {(order.budgetStatus === "pending" || order.budgetStatus === "approved" || order.budgetStatus === "rejected") && (
+        <div className={`card mb-6 ${
+          order.budgetStatus === "pending" ? "border-amber-300 bg-amber-50" :
+          order.budgetStatus === "approved" ? "border-green-300 bg-green-50" :
+          "border-red-300 bg-red-50"
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {order.budgetStatus === "pending" && <FileText className="h-5 w-5 text-amber-600" />}
+              {order.budgetStatus === "approved" && <ThumbsUp className="h-5 w-5 text-green-600" />}
+              {order.budgetStatus === "rejected" && <ThumbsDown className="h-5 w-5 text-red-500" />}
+              <div>
+                <p className="font-semibold text-sm text-gray-900">
+                  {order.budgetStatus === "pending" && "Presupuesto enviado — esperando aprobación del cliente"}
+                  {order.budgetStatus === "approved" && "Presupuesto aprobado por el cliente"}
+                  {order.budgetStatus === "rejected" && "Presupuesto rechazado por el cliente"}
+                </p>
+                {order.budgetRespondedAt && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Respondido: {new Date(order.budgetRespondedAt).toLocaleString("es-MX")}
+                  </p>
+                )}
+                {order.clientNote && (
+                  <p className="text-xs text-gray-600 mt-1 bg-white/50 rounded p-2">
+                    Cliente: &quot;{order.clientNote}&quot;
+                  </p>
+                )}
+              </div>
+            </div>
+            <span className={`status-badge ${
+              order.budgetStatus === "pending" ? "bg-amber-200 text-amber-800" :
+              order.budgetStatus === "approved" ? "bg-green-200 text-green-800" :
+              "bg-red-200 text-red-800"
+            }`}>
+              {order.budgetStatus === "pending" ? "Pendiente" : order.budgetStatus === "approved" ? "Aprobado" : "Rechazado"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Send Budget */}
+      {(!order.budgetStatus || order.budgetStatus === "none" || order.budgetStatus === "rejected") && (order.estimatedCost > 0 || selectedServices.length > 0) && (
+        <div className="card mb-6 border-primary-200 bg-primary-50/30">
+          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm">
+            <Send className="h-4 w-4 text-primary-600" />
+            Enviar Presupuesto al Cliente
+          </h3>
+          <p className="text-xs text-gray-500 mb-3">
+            El cliente podrá aprobar o rechazar desde el portal. Se le enviará un WhatsApp con instrucciones.
+          </p>
+          <textarea
+            value={budgetNote}
+            onChange={(e) => setBudgetNote(e.target.value)}
+            placeholder="Nota para el cliente (opcional): ej. Se encontró un problema adicional..."
+            rows={2}
+            className="input-field text-sm mb-3 resize-none"
+          />
+          <button
+            onClick={sendBudget}
+            disabled={sendingBudget}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            {sendingBudget ? (
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            {sendingBudget ? "Enviando..." : `Enviar Presupuesto (${formatMoneyShort(selectedServices.length > 0 ? servicesTotalPrice : (order.estimatedCost || 0), currency)})`}
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Customer Info */}
