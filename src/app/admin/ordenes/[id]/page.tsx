@@ -620,15 +620,23 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
           </div>
         </div>
 
-        {/* Signature */}
+        {/* Signature - Read Only */}
         <div className="card lg:col-span-2">
-          <SignaturePad
-            onSave={(dataUrl) => order && setOrder({ ...order, signature: dataUrl })}
-            initialValue={order.signature || ""}
-          />
-          {order.signature && (
-            <div className="mt-3 p-3 bg-gray-50 rounded-lg text-center">
-              <img src={order.signature} alt="Firma" className="max-h-20 mx-auto" />
+          <h3 className="font-semibold text-gray-900 mb-3">Firma del Cliente</h3>
+          {order.signature || order.approvalSignature ? (
+            <div className="p-4 bg-gray-50 rounded-xl border-2 border-gray-200">
+              <img 
+                src={order.approvalSignature || order.signature} 
+                alt="Firma del cliente" 
+                className="max-h-32 mx-auto" 
+              />
+              <p className="text-xs text-gray-500 text-center mt-2">
+                {order.approvalSignature ? "Firmado al aprobar presupuesto" : "Firma de recepción"}
+              </p>
+            </div>
+          ) : (
+            <div className="p-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 text-center">
+              <p className="text-sm text-gray-400">Sin firma registrada</p>
             </div>
           )}
         </div>

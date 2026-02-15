@@ -31,30 +31,37 @@ export default function AdminLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [businessName, setBusinessName] = useState("");
+  const [lowStockCount, setLowStockCount] = useState(0);
 
   useEffect(() => {
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then((s) => {
-        if (s.businessName) setBusinessName(s.businessName);
-        if (s.brandColor) {
-          document.documentElement.style.setProperty("--color-primary-600", s.brandColor);
-          const hex = s.brandColor.replace("#", "");
-          const r = parseInt(hex.substring(0, 2), 16);
-          const g = parseInt(hex.substring(2, 4), 16);
-          const b = parseInt(hex.substring(4, 6), 16);
-          document.documentElement.style.setProperty("--color-primary-50", `rgba(${r},${g},${b},0.05)`);
-          document.documentElement.style.setProperty("--color-primary-100", `rgba(${r},${g},${b},0.1)`);
-          document.documentElement.style.setProperty("--color-primary-200", `rgba(${r},${g},${b},0.2)`);
-          document.documentElement.style.setProperty("--color-primary-300", `rgba(${r},${g},${b},0.35)`);
-          document.documentElement.style.setProperty("--color-primary-400", `rgba(${r},${g},${b},0.55)`);
-          document.documentElement.style.setProperty("--color-primary-500", `rgba(${r},${g},${b},0.8)`);
-          document.documentElement.style.setProperty("--color-primary-700", `rgb(${Math.max(0,r-25)},${Math.max(0,g-25)},${Math.max(0,b-25)})`);
-          document.documentElement.style.setProperty("--color-primary-800", `rgb(${Math.max(0,r-45)},${Math.max(0,g-45)},${Math.max(0,b-45)})`);
-          document.documentElement.style.setProperty("--color-primary-900", `rgb(${Math.max(0,r-65)},${Math.max(0,g-65)},${Math.max(0,b-65)})`);
-        }
-      })
-      .catch(() => {});
+    Promise.all([
+      fetch("/api/settings").then((r) => r.json()),
+      fetch("/api/parts").then((r) => r.json()),
+    ]).then(([s, parts]) => {
+      if (s.businessName) setBusinessName(s.businessName);
+      if (s.brandColor) {
+        document.documentElement.style.setProperty("--color-primary-600", s.brandColor);
+        const hex = s.brandColor.replace("#", "");
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        document.documentElement.style.setProperty("--color-primary-50", `rgba(${r},${g},${b},0.05)`);
+        document.documentElement.style.setProperty("--color-primary-100", `rgba(${r},${g},${b},0.1)`);
+        document.documentElement.style.setProperty("--color-primary-200", `rgba(${r},${g},${b},0.2)`);
+        document.documentElement.style.setProperty("--color-primary-300", `rgba(${r},${g},${b},0.35)`);
+        document.documentElement.style.setProperty("--color-primary-400", `rgba(${r},${g},${b},0.55)`);
+        document.documentElement.style.setProperty("--color-primary-500", `rgba(${r},${g},${b},0.8)`);
+        document.documentElement.style.setProperty("--color-primary-700", `rgb(${Math.max(0,r-25)},${Math.max(0,g-25)},${Math.max(0,b-25)})`);
+        document.documentElement.style.setProperty("--color-primary-800", `rgb(${Math.max(0,r-45)},${Math.max(0,g-45)},${Math.max(0,b-45)})`);
+        document.documentElement.style.setProperty("--color-primary-900", `rgb(${Math.max(0,r-65)},${Math.max(0,g-65)},${Math.max(0,b-65)})`);
+      }
+      // Calculate low stock alerts
+      if (Array.isArray(parts)) {
+        const threshold = s.lowStockThreshold || 3;
+        const alerts = parts.filter((p: any) => p.stock <= threshold).length;
+        setLowStockCount(alerts);
+      }
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -123,7 +130,7 @@ export default function AdminLayout({
               key={item.href}
               href={item.href}
               title={sidebarCollapsed ? item.label : undefined}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
                 active
                   ? "bg-gradient-to-r from-blue-500/20 to-blue-600/10 text-white shadow-sm"
                   : "text-slate-400 hover:text-white hover:bg-slate-700/50"
@@ -131,7 +138,12 @@ export default function AdminLayout({
             >
               <item.icon className={`h-[18px] w-[18px] shrink-0 ${active ? "text-blue-400" : "text-slate-500 group-hover:text-slate-300"}`} />
               {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
-              {active && !sidebarCollapsed && (
+              {item.href === "/admin/inventario" && lowStockCount > 0 && (
+                <span className={`${sidebarCollapsed ? 'absolute -top-1 -right-1' : 'ml-auto'} flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full`}>
+                  {lowStockCount}
+                </span>
+              )}
+              {active && !sidebarCollapsed && item.href !== "/admin/inventario" && (
                 <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-400" />
               )}
             </Link>

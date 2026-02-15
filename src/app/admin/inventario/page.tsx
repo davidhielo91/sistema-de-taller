@@ -9,6 +9,7 @@ interface Part {
   name: string;
   cost: number;
   stock: number;
+  timesUsed?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +45,16 @@ export default function InventarioPage() {
 
   const lowStockParts = parts.filter((p) => p.stock <= lowStockThreshold && p.stock > 0);
   const outOfStockParts = parts.filter((p) => p.stock === 0);
+  
+  // Calculate total inventory value
+  const totalValue = parts.reduce((sum, part) => sum + (part.cost * part.stock), 0);
+  const totalItems = parts.reduce((sum, part) => sum + part.stock, 0);
+  
+  // Get most used parts (top 5)
+  const mostUsedParts = [...parts]
+    .filter((p) => (p.timesUsed || 0) > 0)
+    .sort((a, b) => (b.timesUsed || 0) - (a.timesUsed || 0))
+    .slice(0, 5);
 
   const openAdd = () => {
     setEditingPart(null);
@@ -125,6 +136,73 @@ export default function InventarioPage() {
         </button>
       </div>
 
+      {/* Inventory Value Card */}
+      {parts.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="card bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-blue-600 font-medium mb-1">Valor Total</p>
+                <p className="text-2xl font-bold text-blue-900">{formatMoneyShort(totalValue, currency)}</p>
+              </div>
+              <div className="bg-blue-500/10 p-3 rounded-xl">
+                <Package className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+          </div>
+          <div className="card bg-gradient-to-br from-green-50 to-green-100/50 border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-green-600 font-medium mb-1">Total Unidades</p>
+                <p className="text-2xl font-bold text-green-900">{totalItems}</p>
+              </div>
+              <div className="bg-green-500/10 p-3 rounded-xl">
+                <Package className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+          <div className="card bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-amber-600 font-medium mb-1">Alertas</p>
+                <p className="text-2xl font-bold text-amber-900">{lowStockParts.length + outOfStockParts.length}</p>
+              </div>
+              <div className="bg-amber-500/10 p-3 rounded-xl">
+                <AlertTriangle className="h-6 w-6 text-amber-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Most Used Parts */}
+      {mostUsedParts.length > 0 && (
+        <div className="card">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Package className="h-4 w-4 text-primary-600" />
+            Piezas Más Usadas
+          </h3>
+          <div className="space-y-3">
+            {mostUsedParts.map((part, index) => (
+              <div key={part.id} className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-100 text-primary-700 font-bold text-sm shrink-0">
+                  {index + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{part.name}</p>
+                  <p className="text-xs text-gray-500">
+                    Usada {part.timesUsed} {part.timesUsed === 1 ? 'vez' : 'veces'} • Stock: {part.stock}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold text-gray-900">{formatMoneyShort(part.cost, currency)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Alerts */}
       {(lowStockParts.length > 0 || outOfStockParts.length > 0) && (
         <div className="space-y-2">
@@ -170,13 +248,14 @@ export default function InventarioPage() {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Pieza</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Costo</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Stock</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Usos</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600 w-24">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
                     {search ? "Sin resultados" : "No hay piezas registradas"}
                   </td>
                 </tr>
@@ -200,6 +279,11 @@ export default function InventarioPage() {
                         }`}
                       >
                         {part.stock}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="text-sm text-gray-600">
+                        {part.timesUsed || 0}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">

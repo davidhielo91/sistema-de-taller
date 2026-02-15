@@ -32,6 +32,7 @@ export interface Part {
   name: string;
   cost: number;
   stock: number;
+  timesUsed?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -268,6 +269,7 @@ export function reducePartStock(partId: string, quantity: number): Part | null {
   const index = parts.findIndex((p) => p.id === partId);
   if (index < 0) return null;
   parts[index].stock = Math.max(0, parts[index].stock - quantity);
+  parts[index].timesUsed = (parts[index].timesUsed || 0) + 1;
   parts[index].updatedAt = new Date().toISOString();
   fs.writeFileSync(PARTS_FILE, JSON.stringify(parts, null, 2));
   return parts[index];

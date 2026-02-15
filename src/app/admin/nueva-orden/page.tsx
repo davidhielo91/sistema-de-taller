@@ -18,6 +18,26 @@ export default function NuevaOrdenPage() {
   const [availableServices, setAvailableServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
   const [selectedServices, setSelectedServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState("");
+  
+  const [form, setForm] = useState({
+    customerName: "",
+    customerPhone: "",
+    customerEmail: "",
+    deviceType: "",
+    deviceBrand: "",
+    deviceModel: "",
+    serialNumber: "",
+    accessories: "",
+    problemDescription: "",
+    diagnosis: "",
+    estimatedDelivery: "",
+    manualCost: 0,
+    devicePhotos: [] as string[],
+    internalNotes: "",
+  });
+  const [phoneError, setPhoneError] = useState("");
+  const [searchingCustomer, setSearchingCustomer] = useState(false);
+  const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -27,7 +47,27 @@ export default function NuevaOrdenPage() {
       setAvailableServices(Array.isArray(servicesData) ? servicesData : []);
       if (settings?.currency) setCurrency(settings.currency);
     }).catch(() => {});
+
+    // Load draft from localStorage
+    const draft = localStorage.getItem('orderDraft');
+    if (draft) {
+      try {
+        const parsed = JSON.parse(draft);
+        if (parsed.form) setForm(parsed.form);
+        if (parsed.selectedServices) setSelectedServices(parsed.selectedServices);
+      } catch {}
+    }
   }, []);
+
+  // Autosave draft every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (form.customerName || form.customerPhone || form.problemDescription) {
+        localStorage.setItem('orderDraft', JSON.stringify({ form, selectedServices }));
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [form, selectedServices]);
 
   const addService = () => {
     const svc = availableServices.find(s => s.id === selectedServiceId);
@@ -44,28 +84,69 @@ export default function NuevaOrdenPage() {
   const servicesPartsCost = selectedServices.reduce((s, sv) => s + (sv.linkedPartCost || 0), 0);
   const servicesProfit = servicesTotalPrice - servicesPartsCost;
 
-  const [form, setForm] = useState({
-    customerName: "",
-    customerPhone: "",
-    customerEmail: "",
-    deviceType: "",
-    deviceBrand: "",
-    deviceModel: "",
-    serialNumber: "",
-    accessories: "",
-    problemDescription: "",
-    diagnosis: "",
-    estimatedDelivery: "",
-    manualCost: 0,
-    signature: "",
-    devicePhotos: [] as string[],
-  });
+  const searchCustomerByPhone = async (phone: string) => {
+    if (!phone || phone.length < 4) return;
+    setSearchingCustomer(true);
+    try {
+      const res = await fetch(`/api/orders/search?phone=${phone}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.orders && data.orders.length > 0) {
+          const customers = data.orders.reduce((acc: any[], order: any) => {
+            if (!acc.find(c => c.phone === order.customerPhone)) {
+              acc.push({
+                name: order.customerName,
+                phone: order.customerPhone,
+                email: order.customerEmail || "",
+              });
+            }
+            return acc;
+          }, []);
+          setCustomerSuggestions(customers);
+        } else {
+          setCustomerSuggestions([]);
+        }
+      }
+    } catch {
+      setCustomerSuggestions([]);
+    } finally {
+      setSearchingCustomer(false);
+    }
+  };
+
+  const selectCustomer = (customer: any) => {
+    setForm((prev) => ({
+      ...prev,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      customerEmail: customer.email,
+    }));
+    setCustomerSuggestions([]);
+    setPhoneError("");
+  };
+
+  const clearDraft = () => {
+    localStorage.removeItem('orderDraft');
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: name === "manualCost" ? Number(value) : value }));
+    
+    if (name === "customerPhone") {
+      const cleaned = value.replace(/\D/g, "");
+      if (value && cleaned.length < 4) {
+        setPhoneError("Ingresa al menos 4 dígitos");
+        setCustomerSuggestions([]);
+      } else {
+        setPhoneError("");
+        if (cleaned.length >= 4) {
+          searchCustomerByPhone(cleaned);
+        }
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,6 +169,7 @@ export default function NuevaOrdenPage() {
           selectedServices,
           estimatedCost: selectedServices.length > 0 ? servicesTotalPrice : (form.manualCost || 0),
           partsCost: selectedServices.length > 0 ? servicesPartsCost : 0,
+          internalNotes: form.internalNotes ? [{ text: form.internalNotes, date: new Date().toISOString() }] : [],
         }),
       });
 
@@ -95,6 +177,7 @@ export default function NuevaOrdenPage() {
 
       const order = await res.json();
       setCreatedOrder(order);
+      clearDraft();
       setSaving(false);
     } catch {
       setError("Error al crear la orden. Intenta de nuevo.");
@@ -293,6 +376,25 @@ ${o.estimatedCost > 0 ? `<div style="border-top:1px dashed #ccc;margin:12px 0"><
         </div>
       )}
 
+      {localStorage.getItem('orderDraft') && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Save className="h-4 w-4 text-blue-600 shrink-0" />
+            <span className="text-blue-700">Borrador guardado automáticamente</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem('orderDraft');
+              window.location.reload();
+            }}
+            className="text-xs text-blue-600 hover:text-blue-800 underline whitespace-nowrap"
+          >
+            Limpiar borrador
+          </button>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Customer Info */}
         <div className="card">
@@ -311,7 +413,7 @@ ${o.estimatedCost > 0 ? `<div style="border-top:1px dashed #ccc;margin:12px 0"><
                 placeholder="Juan Pérez"
               />
             </div>
-            <div>
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Teléfono <span className="text-red-500">*</span>
               </label>
@@ -320,9 +422,30 @@ ${o.estimatedCost > 0 ? `<div style="border-top:1px dashed #ccc;margin:12px 0"><
                 name="customerPhone"
                 value={form.customerPhone}
                 onChange={handleChange}
-                className="input-field"
+                className={`input-field ${phoneError ? 'border-red-300' : ''}`}
                 placeholder="(123) 456-7890"
               />
+              {phoneError && (
+                <p className="text-xs text-red-500 mt-1">{phoneError}</p>
+              )}
+              {searchingCustomer && (
+                <p className="text-xs text-gray-400 mt-1">Buscando clientes...</p>
+              )}
+              {customerSuggestions.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {customerSuggestions.map((customer, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => selectCustomer(customer)}
+                      className="w-full text-left px-4 py-2 hover:bg-primary-50 transition-colors border-b border-gray-100 last:border-b-0"
+                    >
+                      <p className="text-sm font-medium text-gray-900">{customer.name}</p>
+                      <p className="text-xs text-gray-500">{customer.phone}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -460,6 +583,20 @@ ${o.estimatedCost > 0 ? `<div style="border-top:1px dashed #ccc;margin:12px 0"><
                 placeholder="Diagnóstico preliminar (opcional)..."
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                Notas internas
+                <span className="text-xs text-gray-400 font-normal">(Solo visible para ti)</span>
+              </label>
+              <textarea
+                name="internalNotes"
+                value={form.internalNotes}
+                onChange={handleChange}
+                rows={2}
+                className="input-field resize-none bg-yellow-50 border-yellow-200"
+                placeholder="Ej: Cliente difícil, equipo muy golpeado, etc..."
+              />
+            </div>
             {/* Servicios */}
             <div>
               <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -566,22 +703,15 @@ ${o.estimatedCost > 0 ? `<div style="border-top:1px dashed #ccc;margin:12px 0"><
           </div>
         </div>
 
-        {/* Signature */}
-        <div className="card">
-          <SignaturePad
-            onSave={(dataUrl) => setForm((prev) => ({ ...prev, signature: dataUrl }))}
-          />
-        </div>
-
         {/* Submit */}
-        <div className="flex justify-end gap-3">
-          <Link href="/admin" className="btn-secondary">
+        <div className="flex flex-col sm:flex-row justify-end gap-3">
+          <Link href="/admin" className="btn-secondary w-full sm:w-auto justify-center">
             Cancelar
           </Link>
           <button
             type="submit"
             disabled={saving}
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             {saving ? (
               <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

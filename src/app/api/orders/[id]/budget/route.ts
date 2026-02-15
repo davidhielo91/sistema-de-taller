@@ -32,7 +32,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { action, clientNote } = body;
+    const { action, clientNote, approvalSignature } = body;
 
     if (action !== "approve" && action !== "reject") {
       return NextResponse.json({ error: "Acción no válida" }, { status: 400 });
@@ -44,6 +44,7 @@ export async function POST(
       budgetStatus: action === "approve" ? "approved" as const : "rejected" as const,
       budgetRespondedAt: now,
       clientNote: clientNote || undefined,
+      approvalSignature: action === "approve" ? approvalSignature : undefined,
       updatedAt: now,
     };
 

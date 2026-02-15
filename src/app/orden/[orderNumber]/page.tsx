@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { STATUS_CONFIG, OrderStatus } from "@/types/order";
 import { formatMoney } from "@/lib/currencies";
+import { SignaturePad } from "@/components/signature-pad";
 import {
   Monitor,
   CheckCircle,
@@ -39,6 +40,7 @@ interface ClientOrder {
   budgetRespondedAt?: string;
   budgetNote?: string;
   clientNote?: string;
+  approvalSignature?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,6 +67,7 @@ export default function ClientPortalPage() {
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [clientNote, setClientNote] = useState("");
+  const [approvalSignature, setApprovalSignature] = useState("");
   const [budgetSuccess, setBudgetSuccess] = useState("");
   const [budgetError, setBudgetError] = useState("");
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -93,6 +96,13 @@ export default function ClientPortalPage() {
 
   const handleBudgetAction = async (action: "approve" | "reject") => {
     if (!order) return;
+    
+    // Validate signature for approval
+    if (action === "approve" && !approvalSignature) {
+      setBudgetError("Por favor firma para aprobar el presupuesto");
+      return;
+    }
+    
     if (action === "approve") setApproving(true);
     else setRejecting(true);
 
@@ -100,14 +110,25 @@ export default function ClientPortalPage() {
       const res = await fetch(`/api/orders/${order.id}/budget`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, clientNote: clientNote.trim() || undefined }),
+        body: JSON.stringify({ 
+          action, 
+          clientNote: clientNote.trim() || undefined,
+          approvalSignature: action === "approve" ? approvalSignature : undefined
+        }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        setOrder({ ...order, budgetStatus: data.budgetStatus, budgetRespondedAt: new Date().toISOString(), clientNote: clientNote.trim() || undefined });
+        setOrder({ 
+          ...order, 
+          budgetStatus: data.budgetStatus, 
+          budgetRespondedAt: new Date().toISOString(), 
+          clientNote: clientNote.trim() || undefined,
+          approvalSignature: action === "approve" ? approvalSignature : undefined
+        });
         setBudgetSuccess(action === "approve" ? "Presupuesto aprobado correctamente" : "Presupuesto rechazado. El taller será notificado.");
         setClientNote("");
+        setApprovalSignature("");
       }
     } catch {
       setBudgetError("Error de conexión. Intenta de nuevo.");
@@ -277,6 +298,16 @@ export default function ClientPortalPage() {
                   rows={2}
                   className="input-field text-sm mb-3 resize-none"
                 />
+                
+                <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                  <p className="text-xs font-medium text-blue-900 mb-3">
+                    Para aprobar el presupuesto, firma aquí:
+                  </p>
+                  <SignaturePad
+                    onSave={(dataUrl) => setApprovalSignature(dataUrl)}
+                  />
+                </div>
+
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleBudgetAction("approve")}

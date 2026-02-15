@@ -53,6 +53,7 @@ export interface ServiceOrder {
   budgetRespondedAt?: string;
   budgetNote?: string;
   clientNote?: string;
+  approvalSignature?: string;
   createdAt: string;
   updatedAt: string;
 }
