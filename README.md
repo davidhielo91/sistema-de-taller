@@ -9,7 +9,7 @@ Sistema profesional para talleres de reparación con **innovador portal de clien
 - **Tokens seguros**: JWT con expiración de 24 horas
 - **Fotos de evidencia**: Cliente ve las fotos del equipo desde su celular
 - **Historial en tiempo real**: Seguimiento completo del estado
-- **Aprobación de presupuestos**: Cliente aprueba/rechaza costos extra con 1-click
+- **Aprobación de presupuestos**: Cliente aprueba/rechaza costos extra con firma digital al aprobar
 - **Notificaciones WhatsApp**: Enlace automático al portal del cliente
 
 ### 🛠 Gestión Completa
@@ -17,20 +17,26 @@ Sistema profesional para talleres de reparación con **innovador portal de clien
 - **Inventario de partes**: Control de stock con alertas de bajo inventario
 - **Servicios**: Catálogo de servicios con precios y asignación de partes
 - **Reportes**: Estadísticas de órdenes, ganancias y costos
+- **Centro de notificaciones**: Alertas al admin cuando un cliente aprueba o rechaza presupuesto
 - **Respaldos**: Exportación en CSV (Excel) y JSON completo
 
 ### 📱 Experiencia Cliente
 - **Consulta pública**: Los clientes buscan su orden desde la página principal
 - **Verificación segura**: Solo teléfono + número de orden (mínimo 4 dígitos)
 - **Galería de fotos**: Documentación visual del equipo
-- **Presupuestos interactivos**: Aprobación con comentarios opcionales
+- **Presupuestos interactivos**: Diagnóstico detallado + comentarios opcionales + firma para aprobar
 - **Estado en vivo**: Barra de progreso visual del servicio
 
 ### 🔧 Herramientas Administrativas
-- **Firma digital**: Captura de firma al recibir el equipo
+- **Firma digital**: Captura de firma al recibir el equipo y al aprobar presupuesto
 - **Notificaciones WhatsApp**: Mensajes automáticos personalizados
 - **Personalización**: Logo, colores, horarios, plantillas
 - **Multi-dispositivo**: Responsive 100% para móviles y escritorio
+
+### ⚡ Rendimiento y UX
+- **Cache en memoria**: Lecturas más rápidas para órdenes, servicios, inventario y configuración
+- **Menos polling**: Menor carga en notificaciones sin perder seguimiento
+- **Ajustes móviles**: Mejoras de layout y espaciado en vistas críticas (admin y portal cliente)
 
 ## 🚀 Demo Rápido
 
@@ -41,15 +47,17 @@ Sistema profesional para talleres de reparación con **innovador portal de clien
    - Fotos del equipo
    - Historial de estados
    - Presupuesto pendiente (si aplica)
+   - Diagnóstico detallado
    - Botones de Aprobar/Rechazar
-4. Recibe confirmación por WhatsApp
+   - Firma digital requerida para aprobar
+4. Al responder, el taller recibe notificación en el panel admin
 
 ### Flujo del Administrador
 1. Crea orden → diagnostica → agrega servicios/costos
 2. Haz clic en **"Enviar Presupuesto"**
 3. Cliente recibe WhatsApp con enlace al portal
-4. Cliente aprueba/rechaza desde su celular
-5. Tú ves el resultado en el panel admin
+4. Cliente aprueba/rechaza desde su celular (con firma en aprobación)
+5. Tú ves el resultado en el panel admin + campana de notificaciones
 
 ## 📋 Requisitos
 
@@ -163,10 +171,12 @@ docker run -p 3000:3000 -v $(pwd)/data:/app/data sistema-taller
 - ✨ **Portal de cliente sin contraseñas**
 - 🔐 **Tokens JWT seguros con expiración**
 - 📱 **Galería de fotos para clientes**
-- 💰 **Aprobación de presupuestos online**
+- 💰 **Aprobación de presupuestos online con firma digital**
+- 🔔 **Notificaciones al admin por aprobación/rechazo**
 - 🔔 **Integración mejorada con WhatsApp**
 - 🛡️ **Verificación telefónica mejorada**
 - 📊 **UI/UX optimizada para móviles**
+- ⚡ **Mejoras de rendimiento con cache y optimización de consultas**
 
 ## 🤝 Contribuciones
 

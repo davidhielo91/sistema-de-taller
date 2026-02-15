@@ -6,6 +6,8 @@ function publicOrderData(order: ServiceOrder) {
   return {
     orderNumber: order.orderNumber,
     customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    customerEmail: order.customerEmail || "",
     deviceType: order.deviceType,
     deviceBrand: order.deviceBrand,
     deviceModel: order.deviceModel || "",

@@ -37,6 +37,7 @@ export async function GET(
       accessories: order.accessories || "",
       problemDescription: order.problemDescription,
       diagnosis: order.diagnosis || "",
+      detailedDiagnosis: order.detailedDiagnosis || "",
       estimatedCost: order.estimatedCost || 0,
       estimatedDelivery: order.estimatedDelivery || "",
       status: order.status,

@@ -29,6 +29,7 @@ interface ClientOrder {
   accessories: string;
   problemDescription: string;
   diagnosis: string;
+  detailedDiagnosis?: string;
   estimatedCost: number;
   estimatedDelivery: string;
   status: OrderStatus;
@@ -129,6 +130,9 @@ export default function ClientPortalPage() {
         setBudgetSuccess(action === "approve" ? "Presupuesto aprobado correctamente" : "Presupuesto rechazado. El taller será notificado.");
         setClientNote("");
         setApprovalSignature("");
+      } else {
+        const errData = await res.json().catch(() => null);
+        setBudgetError(errData?.error || "Error al procesar. Intenta de nuevo.");
       }
     } catch {
       setBudgetError("Error de conexión. Intenta de nuevo.");
@@ -196,7 +200,7 @@ export default function ClientPortalPage() {
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
-        {/* Order Header */}
+        {/* 1. Order Header */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs text-gray-400">Orden de Servicio</p>
@@ -210,7 +214,7 @@ export default function ClientPortalPage() {
           </p>
         </div>
 
-        {/* Progress Steps */}
+        {/* 2. Progress Steps */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Progreso</h3>
           <div className="flex items-center justify-between">
@@ -244,39 +248,110 @@ export default function ClientPortalPage() {
           </div>
         </div>
 
-        {/* Budget Approval */}
+        {/* 3. Device Info */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Detalles del Equipo</h3>
+          <div className="space-y-2.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Equipo</span>
+              <span className="font-medium text-gray-900">{order.deviceBrand} {order.deviceType}</span>
+            </div>
+            {order.deviceModel && (
+              <div className="flex justify-between">
+                <span className="text-gray-400">Modelo</span>
+                <span className="font-medium text-gray-900">{order.deviceModel}</span>
+              </div>
+            )}
+            {order.accessories && (
+              <div className="flex justify-between">
+                <span className="text-gray-400">Accesorios</span>
+                <span className="font-medium text-gray-900 text-right max-w-[60%]">{order.accessories}</span>
+              </div>
+            )}
+            {order.estimatedDelivery && (
+              <div className="flex justify-between">
+                <span className="text-gray-400">Entrega est.</span>
+                <span className="font-medium text-gray-900">
+                  {new Date(order.estimatedDelivery + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-gray-400">Ingreso</span>
+              <span className="font-medium text-gray-900">
+                {new Date(order.createdAt).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Device Photos */}
+        {photos.length > 0 && (
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Camera className="h-4 w-4" />
+              Fotos del equipo ({photos.length})
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              {photos.map((photo, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setPhotoIndex(i); setShowPhotoModal(true); }}
+                  className="aspect-square rounded-xl overflow-hidden border border-gray-200 hover:border-primary-300 transition-colors"
+                >
+                  <img src={photo} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 5. Budget Approval */}
         {order.budgetStatus === "pending" && (
           <div className="bg-amber-50 rounded-2xl p-5 shadow-sm border-2 border-amber-200">
-            <h3 className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-amber-800 mb-3 flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Presupuesto pendiente de aprobación
             </h3>
-            {order.budgetNote && (
+
+            {order.budgetNote && order.budgetNote.trim() && (
               <p className="text-sm text-amber-700 mb-3 bg-amber-100/50 rounded-lg p-3">
                 {order.budgetNote}
               </p>
             )}
 
+            {/* Detailed Diagnosis for Client */}
+            {order.detailedDiagnosis && order.detailedDiagnosis.trim() && (
+              <div className="mb-4 p-4 bg-white rounded-xl border-2 border-blue-200">
+                <h4 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
+                  🔍 Diagnóstico Detallado
+                </h4>
+                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {order.detailedDiagnosis}
+                </p>
+              </div>
+            )}
+
             {/* Services breakdown */}
             {order.selectedServices && order.selectedServices.length > 0 && (
-              <div className="space-y-1.5 mb-3">
+              <div className="space-y-1.5 mb-4">
                 {order.selectedServices.map((svc, i) => (
                   <div key={i} className="flex justify-between text-sm">
                     <span className="text-gray-700">{svc.name}</span>
                     <span className="font-medium text-gray-900">{formatMoney(svc.basePrice, currency)}</span>
                   </div>
                 ))}
-                <div className="flex justify-between text-sm font-bold pt-2 border-t border-amber-300">
-                  <span className="text-gray-900">Total</span>
-                  <span className="text-gray-900">{formatMoney(order.estimatedCost, currency)}</span>
+                <div className="flex justify-between items-center pt-3 border-t-2 border-amber-300">
+                  <span className="text-lg font-bold text-gray-900">Total</span>
+                  <span className="text-xl font-bold text-gray-900">{formatMoney(order.estimatedCost, currency)}</span>
                 </div>
               </div>
             )}
 
             {!order.selectedServices?.length && order.estimatedCost > 0 && (
-              <div className="flex justify-between text-sm font-bold mb-3 bg-amber-100/50 rounded-lg p-3">
-                <span className="text-gray-900">Costo estimado</span>
-                <span className="text-gray-900">{formatMoney(order.estimatedCost, currency)}</span>
+              <div className="flex justify-between items-center mb-4 bg-amber-100/50 rounded-lg p-4">
+                <span className="text-lg font-bold text-gray-900">Total</span>
+                <span className="text-xl font-bold text-gray-900">{formatMoney(order.estimatedCost, currency)}</span>
               </div>
             )}
 
@@ -308,11 +383,11 @@ export default function ClientPortalPage() {
                   />
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-4 mt-4">
                   <button
                     onClick={() => handleBudgetAction("approve")}
                     disabled={approving || rejecting}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors text-sm disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors text-sm disabled:opacity-50 shadow-md"
                   >
                     {approving ? (
                       <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -324,7 +399,7 @@ export default function ClientPortalPage() {
                   <button
                     onClick={() => handleBudgetAction("reject")}
                     disabled={approving || rejecting}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors text-sm disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors text-sm disabled:opacity-50 shadow-md"
                   >
                     {rejecting ? (
                       <div className="h-4 w-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
@@ -361,81 +436,7 @@ export default function ClientPortalPage() {
           </div>
         )}
 
-        {/* Device Info */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Detalles del Equipo</h3>
-          <div className="space-y-2.5 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Equipo</span>
-              <span className="font-medium text-gray-900">{order.deviceBrand} {order.deviceType}</span>
-            </div>
-            {order.deviceModel && (
-              <div className="flex justify-between">
-                <span className="text-gray-400">Modelo</span>
-                <span className="font-medium text-gray-900">{order.deviceModel}</span>
-              </div>
-            )}
-            {order.accessories && (
-              <div className="flex justify-between">
-                <span className="text-gray-400">Accesorios</span>
-                <span className="font-medium text-gray-900 text-right max-w-[60%]">{order.accessories}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-gray-400">Problema</span>
-              <span className="font-medium text-gray-900 text-right max-w-[60%]">{order.problemDescription}</span>
-            </div>
-            {order.diagnosis && (
-              <div className="flex justify-between">
-                <span className="text-gray-400">Diagnóstico</span>
-                <span className="font-medium text-gray-900 text-right max-w-[60%]">{order.diagnosis}</span>
-              </div>
-            )}
-            {order.estimatedCost > 0 && order.budgetStatus === "none" && (
-              <div className="flex justify-between">
-                <span className="text-gray-400">Costo</span>
-                <span className="font-semibold text-gray-900">{formatMoney(order.estimatedCost, currency)}</span>
-              </div>
-            )}
-            {order.estimatedDelivery && (
-              <div className="flex justify-between">
-                <span className="text-gray-400">Entrega est.</span>
-                <span className="font-medium text-gray-900">
-                  {new Date(order.estimatedDelivery + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}
-                </span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-gray-400">Ingreso</span>
-              <span className="font-medium text-gray-900">
-                {new Date(order.createdAt).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Device Photos */}
-        {photos.length > 0 && (
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <Camera className="h-4 w-4" />
-              Fotos del equipo ({photos.length})
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              {photos.map((photo, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setPhotoIndex(i); setShowPhotoModal(true); }}
-                  className="aspect-square rounded-xl overflow-hidden border border-gray-200 hover:border-primary-300 transition-colors"
-                >
-                  <img src={photo} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Status History */}
+        {/* 6. Status History */}
         {order.statusHistory && order.statusHistory.length > 0 && (
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
             <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">

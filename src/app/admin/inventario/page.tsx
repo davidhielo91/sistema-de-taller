@@ -248,14 +248,13 @@ export default function InventarioPage() {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Pieza</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Costo</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Stock</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Usos</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600 w-24">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
                     {search ? "Sin resultados" : "No hay piezas registradas"}
                   </td>
                 </tr>
@@ -279,11 +278,6 @@ export default function InventarioPage() {
                         }`}
                       >
                         {part.stock}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="text-sm text-gray-600">
-                        {part.timesUsed || 0}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">

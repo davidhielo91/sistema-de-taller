@@ -29,6 +29,15 @@ export async function PUT(
     const body = await request.json();
     const now = new Date().toISOString();
 
+    // Block advancing to reparando/listo/entregado if budget not approved
+    const blockedStatuses = ["reparando", "listo", "entregado"];
+    if (body.status && body.status !== order.status && blockedStatuses.includes(body.status)) {
+      const bs = order.budgetStatus || "none";
+      if (bs === "pending" || bs === "rejected") {
+        return NextResponse.json({ error: "No se puede avanzar sin aprobación del presupuesto" }, { status: 400 });
+      }
+    }
+
     // Track status changes in history
     let statusHistory = order.statusHistory || [];
     if (body.status && body.status !== order.status) {

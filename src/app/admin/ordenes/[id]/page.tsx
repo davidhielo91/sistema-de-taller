@@ -11,7 +11,7 @@ import {
   InternalNote,
 } from "@/types/order";
 import Link from "next/link";
-import { ArrowLeft, Save, Copy, Check, Printer, Plus, Trash2, Clock, MessageSquare, MessageCircle, Wrench, FileText, Send, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ArrowLeft, Save, Copy, Check, Printer, Plus, Trash2, Clock, MessageSquare, MessageCircle, Wrench, FileText, Send, ThumbsUp, ThumbsDown, ChevronDown } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { formatMoney, formatMoneyShort } from "@/lib/currencies";
 import { SignaturePad } from "@/components/signature-pad";
@@ -43,6 +43,7 @@ export default function OrderDetailPage() {
   const [availableServices, setAvailableServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
   const [selectedServices, setSelectedServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [showServiceDropdown, setShowServiceDropdown] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -331,21 +332,38 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
           {ALL_STATUSES.map((status) => {
             const config = STATUS_CONFIG[status];
             const isActive = order.status === status;
+            const requiresApproval = ["reparando", "listo", "entregado"].includes(status);
+            const budgetBlocked = requiresApproval && order.budgetStatus !== "none" && order.budgetStatus !== "approved";
             return (
               <button
                 key={status}
-                onClick={() => handleStatusChange(status)}
+                onClick={() => !budgetBlocked && handleStatusChange(status)}
+                disabled={budgetBlocked}
+                title={budgetBlocked ? "Requiere aprobación del presupuesto" : ""}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 ${
                   isActive
                     ? `${config.bgColor} ${config.color} border-current`
+                    : budgetBlocked
+                    ? "bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed"
                     : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
                 }`}
               >
                 {config.label}
+                {budgetBlocked && " 🔒"}
               </button>
             );
           })}
         </div>
+        {order.budgetStatus === "pending" && (
+          <p className="mt-3 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+            ⚠️ No puedes avanzar a reparación hasta que el cliente apruebe el presupuesto.
+          </p>
+        )}
+        {order.budgetStatus === "rejected" && (
+          <p className="mt-3 text-xs text-red-700 bg-red-50 rounded-lg px-3 py-2">
+            ⚠️ El cliente rechazó el presupuesto. Re-envía uno nuevo para poder continuar.
+          </p>
+        )}
       </div>
 
       {/* Budget Status */}
@@ -355,14 +373,14 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
           order.budgetStatus === "approved" ? "border-green-300 bg-green-50" :
           "border-red-300 bg-red-50"
         }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {order.budgetStatus === "pending" && <FileText className="h-5 w-5 text-amber-600" />}
-              {order.budgetStatus === "approved" && <ThumbsUp className="h-5 w-5 text-green-600" />}
-              {order.budgetStatus === "rejected" && <ThumbsDown className="h-5 w-5 text-red-500" />}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start gap-2">
+              {order.budgetStatus === "pending" && <FileText className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />}
+              {order.budgetStatus === "approved" && <ThumbsUp className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />}
+              {order.budgetStatus === "rejected" && <ThumbsDown className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />}
               <div>
                 <p className="font-semibold text-sm text-gray-900">
-                  {order.budgetStatus === "pending" && "Presupuesto enviado — esperando aprobación del cliente"}
+                  {order.budgetStatus === "pending" && "Presupuesto enviado — esperando aprobación"}
                   {order.budgetStatus === "approved" && "Presupuesto aprobado por el cliente"}
                   {order.budgetStatus === "rejected" && "Presupuesto rechazado por el cliente"}
                 </p>
@@ -378,7 +396,7 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
                 )}
               </div>
             </div>
-            <span className={`status-badge ${
+            <span className={`status-badge shrink-0 w-fit ${
               order.budgetStatus === "pending" ? "bg-amber-200 text-amber-800" :
               order.budgetStatus === "approved" ? "bg-green-200 text-green-800" :
               "bg-red-200 text-red-800"
@@ -389,43 +407,11 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
         </div>
       )}
 
-      {/* Send Budget */}
-      {(!order.budgetStatus || order.budgetStatus === "none" || order.budgetStatus === "rejected") && (order.estimatedCost > 0 || selectedServices.length > 0) && (
-        <div className="card mb-6 border-primary-200 bg-primary-50/30">
-          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm">
-            <Send className="h-4 w-4 text-primary-600" />
-            Enviar Presupuesto al Cliente
-          </h3>
-          <p className="text-xs text-gray-500 mb-3">
-            El cliente podrá aprobar o rechazar desde el portal. Se le enviará un WhatsApp con instrucciones.
-          </p>
-          <textarea
-            value={budgetNote}
-            onChange={(e) => setBudgetNote(e.target.value)}
-            placeholder="Nota para el cliente (opcional): ej. Se encontró un problema adicional..."
-            rows={2}
-            className="input-field text-sm mb-3 resize-none"
-          />
-          <button
-            onClick={sendBudget}
-            disabled={sendingBudget}
-            className="btn-primary flex items-center gap-2 text-sm"
-          >
-            {sendingBudget ? (
-              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-            {sendingBudget ? "Enviando..." : `Enviar Presupuesto (${formatMoneyShort(selectedServices.length > 0 ? servicesTotalPrice : (order.estimatedCost || 0), currency)})`}
-          </button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Customer Info */}
+      <div className="space-y-6">
+        {/* Customer & Device Info - Single Column */}
         <div className="card">
           <h3 className="font-semibold text-gray-900 mb-4">Datos del Cliente</h3>
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
               <input type="text" name="customerName" value={order.customerName} onChange={handleChange} className="input-field" />
@@ -439,10 +425,7 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
               <input type="email" name="customerEmail" value={order.customerEmail} onChange={handleChange} className="input-field" />
             </div>
           </div>
-        </div>
 
-        {/* Device Info */}
-        <div className="card">
           <h3 className="font-semibold text-gray-900 mb-4">Datos del Equipo</h3>
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -475,6 +458,38 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
               <label className="block text-sm font-medium text-gray-700 mb-1">Accesorios recibidos</label>
               <input type="text" name="accessories" value={order.accessories || ""} onChange={handleChange} className="input-field" placeholder="Cargador, mouse, funda, etc." />
             </div>
+
+            {/* Problem Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción del problema</label>
+              <textarea name="problemDescription" value={order.problemDescription} onChange={handleChange} rows={3} className="input-field resize-none" placeholder="Lo que reporta el cliente..." />
+            </div>
+
+            {/* Detailed Diagnosis for Client */}
+            <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+              <label className="block text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Reporte Detallado para el Cliente
+              </label>
+              <p className="text-xs text-blue-700 mb-3">
+                Este diagnóstico detallado será visible para el cliente en el portal cuando revise el presupuesto. Explica la falla encontrada y qué se necesita hacer.
+              </p>
+              <textarea 
+                name="detailedDiagnosis" 
+                value={order.detailedDiagnosis || ""} 
+                onChange={handleChange} 
+                rows={6} 
+                className="input-field resize-none text-sm"
+                placeholder="Ejemplo: Se encontró que la tarjeta madre presenta un corto circuito en el sistema de carga. El componente U7400 (chip de carga) está dañado. Se requiere reemplazo del chip mediante técnica de microsoldadura y limpieza profunda del área afectada. También se detectó oxidación en el conector de batería que debe ser tratada..."
+              />
+            </div>
+
+            {/* Estimated Delivery Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha estimada de entrega</label>
+              <input type="date" name="estimatedDelivery" value={order.estimatedDelivery || ""} onChange={handleChange} className="input-field" />
+            </div>
+
             {/* Servicios */}
             {availableServices.length > 0 && (
               <div>
@@ -483,16 +498,46 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
                   Servicios
                 </h4>
                 <div className="space-y-3">
-                  <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                    <select value={selectedServiceId} onChange={(e) => setSelectedServiceId(e.target.value)} className="input-field flex-1">
-                      <option value="">Seleccionar servicio...</option>
-                      {availableServices.filter(s => !selectedServices.find(ss => ss.id === s.id)).map((s) => (
-                        <option key={s.id} value={s.id}>{s.name} — {formatMoneyShort(s.basePrice, currency)}</option>
-                      ))}
-                    </select>
-                    <button type="button" onClick={addServiceToOrder} disabled={!selectedServiceId} className="btn-primary px-3 shrink-0">
-                      <Plus className="h-4 w-4" />
+                  <div className="relative">
+                    {showServiceDropdown && <div className="fixed inset-0 z-10" onClick={() => setShowServiceDropdown(false)} />}
+                    <button
+                      type="button"
+                      onClick={() => setShowServiceDropdown(!showServiceDropdown)}
+                      className="input-field w-full text-left flex items-center justify-between"
+                    >
+                      <span className={selectedServiceId ? "text-gray-900" : "text-gray-400"}>
+                        {selectedServiceId
+                          ? (() => { const s = availableServices.find(sv => sv.id === selectedServiceId); return s ? `${s.name} — ${formatMoneyShort(s.basePrice, currency)}` : "Seleccionar servicio..."; })()
+                          : "Seleccionar servicio..."}
+                      </span>
+                      <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showServiceDropdown ? "rotate-180" : ""}`} />
                     </button>
+                    {showServiceDropdown && (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                        {availableServices.filter(s => !selectedServices.find(ss => ss.id === s.id)).length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-gray-400">Todos los servicios ya están agregados</div>
+                        ) : (
+                          availableServices.filter(s => !selectedServices.find(ss => ss.id === s.id)).map((s) => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => {
+                                if (!order) return;
+                                if (!selectedServices.find(ss => ss.id === s.id)) {
+                                  setSelectedServices([...selectedServices, s]);
+                                }
+                                setSelectedServiceId("");
+                                setShowServiceDropdown(false);
+                              }}
+                              className="w-full text-left px-4 py-3 hover:bg-purple-50 transition-colors border-b border-gray-50 last:border-b-0 flex items-center justify-between"
+                            >
+                              <span className="text-sm font-medium text-gray-900">{s.name}</span>
+                              <span className="text-sm font-semibold text-purple-600">{formatMoneyShort(s.basePrice, currency)}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                   {selectedServices.length === 0 ? (
                     <p className="text-sm text-gray-400 py-2">Sin servicios seleccionados</p>
@@ -521,19 +566,23 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
 
             {/* Resumen de costos */}
             {(selectedServices.length > 0 || (order.estimatedCost || 0) > 0) && (
-              <div className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Cobro al cliente:</span>
-                  <span className="font-semibold text-gray-900">{formatMoney(selectedServices.length > 0 ? servicesTotalPrice : (order.estimatedCost || 0), currency)}</span>
+              <div className="p-5 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    💰 Presupuesto Total
+                  </span>
+                  <span className="text-2xl font-bold text-green-700">
+                    {formatMoney(selectedServices.length > 0 ? servicesTotalPrice : (order.estimatedCost || 0), currency)}
+                  </span>
                 </div>
                 {((selectedServices.length > 0 ? servicesPartsCost : (order.partsCost || 0)) > 0) && (
                   <>
-                    <div className="flex justify-between text-sm">
+                    <div className="flex justify-between text-sm pt-3 border-t border-green-200">
                       <span className="text-gray-600">Costo de piezas:</span>
-                      <span className="text-red-600">-{formatMoney(selectedServices.length > 0 ? servicesPartsCost : (order.partsCost || 0), currency)}</span>
+                      <span className="text-red-600 font-medium">-{formatMoney(selectedServices.length > 0 ? servicesPartsCost : (order.partsCost || 0), currency)}</span>
                     </div>
-                    <div className="flex justify-between text-sm pt-2 border-t border-gray-300">
-                      <span className="font-medium text-gray-700">Ganancia:</span>
+                    <div className="flex justify-between text-sm pt-2">
+                      <span className="font-semibold text-gray-700">Ganancia neta:</span>
                       <span className="font-bold text-green-700">
                         {formatMoney(
                           selectedServices.length > 0
@@ -547,30 +596,63 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
                 )}
               </div>
             )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha estimada de entrega</label>
-              <input type="date" name="estimatedDelivery" value={order.estimatedDelivery || ""} onChange={handleChange} className="input-field" />
-            </div>
-          </div>
-        </div>
 
-        {/* Problem */}
-        <div className="card lg:col-span-2">
-          <h3 className="font-semibold text-gray-900 mb-4">Problema y Diagnóstico</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción del problema</label>
-              <textarea name="problemDescription" value={order.problemDescription} onChange={handleChange} rows={4} className="input-field resize-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Diagnóstico</label>
-              <textarea name="diagnosis" value={order.diagnosis} onChange={handleChange} rows={4} className="input-field resize-none" />
-            </div>
+            {/* Send Budget */}
+            {(!order.budgetStatus || order.budgetStatus === "none" || order.budgetStatus === "rejected") && (order.estimatedCost > 0 || selectedServices.length > 0) && (
+              <div className="p-5 bg-gradient-to-br from-blue-50 to-primary-50 rounded-xl border-2 border-primary-300 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <Send className="h-5 w-5 text-primary-600" />
+                  <h3 className="font-bold text-gray-900 text-base">
+                    Enviar Presupuesto al Cliente
+                  </h3>
+                </div>
+                <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+                  📱 El cliente recibirá un WhatsApp con el link al portal donde podrá aprobar o rechazar el presupuesto.
+                </p>
+                <textarea
+                  value={budgetNote}
+                  onChange={(e) => setBudgetNote(e.target.value)}
+                  placeholder="Nota para el cliente (opcional): ej. Se encontró un problema adicional que requiere atención..."
+                  rows={2}
+                  className="input-field text-sm mb-4 resize-none"
+                />
+                <button
+                  onClick={sendBudget}
+                  disabled={sendingBudget}
+                  className="btn-primary w-full flex items-center justify-center gap-2 text-base font-semibold py-3"
+                >
+                  {sendingBudget ? (
+                    <>
+                      <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Enviando presupuesto...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-5 w-5" />
+                      <span className="hidden sm:inline">Enviar Presupuesto de {formatMoney(selectedServices.length > 0 ? servicesTotalPrice : (order.estimatedCost || 0), currency)}</span>
+                      <span className="sm:hidden">Enviar {formatMoney(selectedServices.length > 0 ? servicesTotalPrice : (order.estimatedCost || 0), currency)}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Helper message when no services/cost */}
+            {(!order.budgetStatus || order.budgetStatus === "none") && selectedServices.length === 0 && (order.estimatedCost || 0) === 0 && (
+              <div className="p-4 bg-amber-50 border-2 border-dashed border-amber-300 rounded-xl text-center">
+                <p className="text-sm text-amber-800 font-medium mb-1">
+                  💡 Agrega servicios o define un costo para enviar el presupuesto
+                </p>
+                <p className="text-xs text-amber-700">
+                  Selecciona servicios arriba o ingresa un monto en &quot;Cobro al cliente&quot;
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Device Photos */}
-        <div className="card lg:col-span-2">
+        <div className="card">
           <PhotoUpload
             photos={order.devicePhotos || []}
             onChange={(photos) => order && setOrder({ ...order, devicePhotos: photos })}
@@ -579,7 +661,7 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
 
 
         {/* Internal Notes */}
-        <div className="card lg:col-span-2">
+        <div className="card">
           <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
             Notas Internas
@@ -621,7 +703,7 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
         </div>
 
         {/* Signature - Read Only */}
-        <div className="card lg:col-span-2">
+        <div className="card">
           <h3 className="font-semibold text-gray-900 mb-3">Firma del Cliente</h3>
           {order.signature || order.approvalSignature ? (
             <div className="p-4 bg-gray-50 rounded-xl border-2 border-gray-200">
@@ -642,7 +724,7 @@ ${order.signature ? `<div class="divider"></div><div style="text-align:center"><
         </div>
 
         {/* Status History */}
-        <div className="card lg:col-span-2">
+        <div className="card">
           <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Clock className="h-4 w-4" />
             Historial de Cambios

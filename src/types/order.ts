@@ -38,6 +38,7 @@ export interface ServiceOrder {
   accessories: string;
   problemDescription: string;
   diagnosis: string;
+  detailedDiagnosis?: string;
   estimatedCost: number;
   partsCost: number;
   estimatedDelivery: string;

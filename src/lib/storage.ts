@@ -11,6 +11,24 @@ const PARTS_FILE = path.join(DATA_DIR, "parts.json");
 const AUTH_FILE = path.join(DATA_DIR, "auth.json");
 const SERVICES_FILE = path.join(DATA_DIR, "services.json");
 
+// In-memory cache to avoid reading from disk on every request
+const cache: Record<string, { data: any; ts: number }> = {};
+const CACHE_TTL = 3000; // 3 seconds
+
+function getCached<T>(key: string): T | null {
+  const entry = cache[key];
+  if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.data as T;
+  return null;
+}
+
+function setCache(key: string, data: any) {
+  cache[key] = { data, ts: Date.now() };
+}
+
+function invalidateCache(key: string) {
+  delete cache[key];
+}
+
 export interface BusinessSettings {
   businessName: string;
   phone: string;
@@ -86,9 +104,12 @@ function ensureDataDir() {
 }
 
 export function getOrders(): ServiceOrder[] {
+  const cached = getCached<ServiceOrder[]>("orders");
+  if (cached) return cached;
   ensureDataDir();
-  const data = fs.readFileSync(DATA_FILE, "utf-8");
-  return JSON.parse(data);
+  const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+  setCache("orders", data);
+  return data;
 }
 
 export function getOrderById(id: string): ServiceOrder | undefined {
@@ -108,6 +129,8 @@ export function searchOrdersByPhone(phone: string): ServiceOrder[] {
 }
 
 export function getSettings(): BusinessSettings {
+  const cached = getCached<BusinessSettings>("settings");
+  if (cached) return cached;
   ensureDataDir();
   if (!fs.existsSync(SETTINGS_FILE)) {
     const defaults: BusinessSettings = {
@@ -144,12 +167,15 @@ export function getSettings(): BusinessSettings {
     countryCode: "52",
   };
   const stored = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
-  return { ...defaults, ...stored };
+  const result = { ...defaults, ...stored };
+  setCache("settings", result);
+  return result;
 }
 
 export function saveSettings(settings: BusinessSettings): BusinessSettings {
   ensureDataDir();
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+  invalidateCache("settings");
   return settings;
 }
 
@@ -162,6 +188,7 @@ export function saveOrder(order: ServiceOrder): ServiceOrder {
     orders.push(order);
   }
   fs.writeFileSync(DATA_FILE, JSON.stringify(orders, null, 2));
+  invalidateCache("orders");
   return order;
 }
 
@@ -170,6 +197,7 @@ export function deleteOrder(id: string): boolean {
   const filtered = orders.filter((o) => o.id !== id);
   if (filtered.length === orders.length) return false;
   fs.writeFileSync(DATA_FILE, JSON.stringify(filtered, null, 2));
+  invalidateCache("orders");
   return true;
 }
 
@@ -190,12 +218,16 @@ export function generateOrderNumber(): string {
 // ─── Parts Inventory ───
 
 export function getParts(): Part[] {
+  const cached = getCached<Part[]>("parts");
+  if (cached) return cached;
   ensureDataDir();
   if (!fs.existsSync(PARTS_FILE)) {
     fs.writeFileSync(PARTS_FILE, JSON.stringify([], null, 2));
     return [];
   }
-  return JSON.parse(fs.readFileSync(PARTS_FILE, "utf-8"));
+  const data = JSON.parse(fs.readFileSync(PARTS_FILE, "utf-8"));
+  setCache("parts", data);
+  return data;
 }
 
 export function getPartById(id: string): Part | undefined {
@@ -211,6 +243,7 @@ export function savePart(part: Part): Part {
     parts.push(part);
   }
   fs.writeFileSync(PARTS_FILE, JSON.stringify(parts, null, 2));
+  invalidateCache("parts");
   return part;
 }
 
@@ -219,6 +252,7 @@ export function deletePart(id: string): boolean {
   const filtered = parts.filter((p) => p.id !== id);
   if (filtered.length === parts.length) return false;
   fs.writeFileSync(PARTS_FILE, JSON.stringify(filtered, null, 2));
+  invalidateCache("parts");
   return true;
 }
 
@@ -236,12 +270,16 @@ export interface RepairService {
 }
 
 export function getServices(): RepairService[] {
+  const cached = getCached<RepairService[]>("services");
+  if (cached) return cached;
   ensureDataDir();
   if (!fs.existsSync(SERVICES_FILE)) {
     fs.writeFileSync(SERVICES_FILE, JSON.stringify([], null, 2));
     return [];
   }
-  return JSON.parse(fs.readFileSync(SERVICES_FILE, "utf-8"));
+  const data = JSON.parse(fs.readFileSync(SERVICES_FILE, "utf-8"));
+  setCache("services", data);
+  return data;
 }
 
 export function saveService(service: RepairService): RepairService {
@@ -253,6 +291,7 @@ export function saveService(service: RepairService): RepairService {
     services.push(service);
   }
   fs.writeFileSync(SERVICES_FILE, JSON.stringify(services, null, 2));
+  invalidateCache("services");
   return service;
 }
 
@@ -261,6 +300,7 @@ export function deleteService(id: string): boolean {
   const filtered = services.filter((s) => s.id !== id);
   if (filtered.length === services.length) return false;
   fs.writeFileSync(SERVICES_FILE, JSON.stringify(filtered, null, 2));
+  invalidateCache("services");
   return true;
 }
 
@@ -272,6 +312,7 @@ export function reducePartStock(partId: string, quantity: number): Part | null {
   parts[index].timesUsed = (parts[index].timesUsed || 0) + 1;
   parts[index].updatedAt = new Date().toISOString();
   fs.writeFileSync(PARTS_FILE, JSON.stringify(parts, null, 2));
+  invalidateCache("parts");
   return parts[index];
 }
 

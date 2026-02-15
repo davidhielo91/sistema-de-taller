@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrderById, saveOrder } from "@/lib/storage";
 import { verifyClientToken } from "@/lib/client-token";
+import { createNotification } from "@/lib/notifications";
 
 export async function POST(
   request: NextRequest,
@@ -38,6 +39,10 @@ export async function POST(
       return NextResponse.json({ error: "Acción no válida" }, { status: 400 });
     }
 
+    if (action === "approve" && !approvalSignature) {
+      return NextResponse.json({ error: "Se requiere firma para aprobar el presupuesto" }, { status: 400 });
+    }
+
     const now = new Date().toISOString();
     const updated = {
       ...order,
@@ -49,6 +54,26 @@ export async function POST(
     };
 
     const saved = saveOrder(updated);
+    
+    // Create notification
+    if (action === "approve") {
+      createNotification(
+        "budget_approved",
+        "Presupuesto Aprobado",
+        `El cliente aprobó el presupuesto de la orden ${order.orderNumber}`,
+        order.id,
+        order.orderNumber
+      );
+    } else {
+      createNotification(
+        "budget_rejected",
+        "Presupuesto Rechazado",
+        `El cliente rechazó el presupuesto de la orden ${order.orderNumber}`,
+        order.id,
+        order.orderNumber
+      );
+    }
+    
     return NextResponse.json({ success: true, budgetStatus: saved.budgetStatus });
   } catch {
     return NextResponse.json({ error: "Error al procesar" }, { status: 500 });

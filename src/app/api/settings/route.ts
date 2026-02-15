@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const settings = getSettings();
-    return NextResponse.json(settings);
+    return NextResponse.json(settings, {
+      headers: { "Cache-Control": "private, max-age=10" },
+    });
   } catch (error) {
     console.error("GET /api/settings error:", error);
     return NextResponse.json({ error: "Error al obtener configuración" }, { status: 500 });

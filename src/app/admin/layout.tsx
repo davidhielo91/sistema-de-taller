@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import {
   Monitor,
   LayoutDashboard,
@@ -102,16 +103,26 @@ export default function AdminLayout({
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-700/50 shrink-0">
+      <div className={`border-b border-slate-700/50 shrink-0 ${sidebarCollapsed ? "flex flex-col items-center gap-2 py-3 px-2" : "flex items-center gap-3 px-4 h-16"}`}>
         <div className="bg-gradient-to-br from-blue-400 to-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20 shrink-0">
           <Monitor className="h-5 w-5 text-white" />
         </div>
         {!sidebarCollapsed && (
-          <div className="overflow-hidden">
-            <h1 className="text-sm font-bold text-white truncate">
-              {businessName || "Mi Taller"}
-            </h1>
-            <p className="text-[10px] text-slate-400 truncate">Panel Admin</p>
+          <>
+            <div className="overflow-hidden flex-1">
+              <h1 className="text-sm font-bold text-white truncate">
+                {businessName || "Mi Taller"}
+              </h1>
+              <p className="text-[10px] text-slate-400 truncate">Panel Admin</p>
+            </div>
+            <div className="hidden lg:block">
+              <NotificationsDropdown />
+            </div>
+          </>
+        )}
+        {sidebarCollapsed && (
+          <div className="hidden lg:block">
+            <NotificationsDropdown />
           </div>
         )}
       </div>
@@ -258,9 +269,12 @@ export default function AdminLayout({
               <span className="font-bold text-gray-900 text-sm">{businessName || "Mi Taller"}</span>
             </div>
           </div>
-          <Link href="/" className="text-xs text-gray-400 hover:text-primary-600">
-            <ChevronLeft className="h-4 w-4" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <NotificationsDropdown />
+            <Link href="/" className="text-xs text-gray-400 hover:text-primary-600">
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </div>
         </div>
       </nav>
 

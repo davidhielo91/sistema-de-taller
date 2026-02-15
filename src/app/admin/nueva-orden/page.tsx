@@ -1,23 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { DEVICE_TYPES, DEVICE_BRANDS, STATUS_CONFIG, ServiceOrder } from "@/types/order";
-import { Save, ArrowLeft, Printer, CheckCircle, Eye, MessageCircle, PlusCircle, Plus, Trash2, FileDown, Wrench } from "lucide-react";
-import { formatMoney, formatMoneyShort, getCurrency } from "@/lib/currencies";
+import { DEVICE_TYPES, DEVICE_BRANDS, ServiceOrder } from "@/types/order";
+import { Save, ArrowLeft, Printer, CheckCircle, Eye, MessageCircle, PlusCircle, FileDown } from "lucide-react";
+import { formatMoney } from "@/lib/currencies";
 import Link from "next/link";
-import { SignaturePad } from "@/components/signature-pad";
 import { PhotoUpload } from "@/components/photo-upload";
 
 export default function NuevaOrdenPage() {
-  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [createdOrder, setCreatedOrder] = useState<ServiceOrder | null>(null);
   const [currency, setCurrency] = useState("MXN");
-  const [availableServices, setAvailableServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
-  const [selectedServices, setSelectedServices] = useState<{id:string;name:string;basePrice:number;linkedPartId?:string;linkedPartName?:string;linkedPartCost?:number}[]>([]);
-  const [selectedServiceId, setSelectedServiceId] = useState("");
   
   const [form, setForm] = useState({
     customerName: "",
@@ -30,23 +24,21 @@ export default function NuevaOrdenPage() {
     accessories: "",
     problemDescription: "",
     diagnosis: "",
-    estimatedDelivery: "",
-    manualCost: 0,
     devicePhotos: [] as string[],
     internalNotes: "",
   });
   const [phoneError, setPhoneError] = useState("");
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
+  const [hasDraft, setHasDraft] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/settings").then(r => r.json()),
-      fetch("/api/services").then(r => r.json()).catch(() => []),
-    ]).then(([settings, servicesData]) => {
-      setAvailableServices(Array.isArray(servicesData) ? servicesData : []);
-      if (settings?.currency) setCurrency(settings.currency);
-    }).catch(() => {});
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((settings) => {
+        if (settings?.currency) setCurrency(settings.currency);
+      })
+      .catch(() => {});
 
     // Load draft from localStorage
     const draft = localStorage.getItem('orderDraft');
@@ -54,7 +46,7 @@ export default function NuevaOrdenPage() {
       try {
         const parsed = JSON.parse(draft);
         if (parsed.form) setForm(parsed.form);
-        if (parsed.selectedServices) setSelectedServices(parsed.selectedServices);
+        setHasDraft(true);
       } catch {}
     }
   }, []);
@@ -63,37 +55,23 @@ export default function NuevaOrdenPage() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (form.customerName || form.customerPhone || form.problemDescription) {
-        localStorage.setItem('orderDraft', JSON.stringify({ form, selectedServices }));
+        localStorage.setItem('orderDraft', JSON.stringify({ form }));
       }
     }, 10000);
     return () => clearInterval(interval);
-  }, [form, selectedServices]);
-
-  const addService = () => {
-    const svc = availableServices.find(s => s.id === selectedServiceId);
-    if (!svc || selectedServices.find(s => s.id === svc.id)) return;
-    setSelectedServices([...selectedServices, svc]);
-    setSelectedServiceId("");
-  };
-
-  const removeService = (id: string) => {
-    setSelectedServices(selectedServices.filter(s => s.id !== id));
-  };
-
-  const servicesTotalPrice = selectedServices.reduce((s, sv) => s + sv.basePrice, 0);
-  const servicesPartsCost = selectedServices.reduce((s, sv) => s + (sv.linkedPartCost || 0), 0);
-  const servicesProfit = servicesTotalPrice - servicesPartsCost;
+  }, [form]);
 
   const searchCustomerByPhone = async (phone: string) => {
     if (!phone || phone.length < 4) return;
     setSearchingCustomer(true);
     try {
-      const res = await fetch(`/api/orders/search?phone=${phone}`);
+      const res = await fetch(`/api/orders/search?q=${encodeURIComponent(phone)}&type=phone`);
       if (res.ok) {
         const data = await res.json();
-        if (data.orders && data.orders.length > 0) {
-          const customers = data.orders.reduce((acc: any[], order: any) => {
-            if (!acc.find(c => c.phone === order.customerPhone)) {
+        const orders = Array.isArray(data) ? data : [];
+        if (orders.length > 0) {
+          const customers = orders.reduce((acc: any[], order: any) => {
+            if (!acc.find((c: any) => c.phone === order.customerPhone)) {
               acc.push({
                 name: order.customerName,
                 phone: order.customerPhone,
@@ -133,7 +111,7 @@ export default function NuevaOrdenPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: name === "manualCost" ? Number(value) : value }));
+    setForm((prev) => ({ ...prev, [name]: value }));
     
     if (name === "customerPhone") {
       const cleaned = value.replace(/\D/g, "");
@@ -165,10 +143,10 @@ export default function NuevaOrdenPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          manualCost: undefined,
-          selectedServices,
-          estimatedCost: selectedServices.length > 0 ? servicesTotalPrice : (form.manualCost || 0),
-          partsCost: selectedServices.length > 0 ? servicesPartsCost : 0,
+          estimatedCost: 0,
+          partsCost: 0,
+          estimatedDelivery: "",
+          selectedServices: [],
           internalNotes: form.internalNotes ? [{ text: form.internalNotes, date: new Date().toISOString() }] : [],
         }),
       });
@@ -216,7 +194,6 @@ ${o.accessories ? `<div class="row"><span class="label">Accesorios:</span><span 
 <div class="divider"></div>
 <div class="row"><span class="label">Problema:</span></div>
 <div>${o.problemDescription}</div>
-${selectedServices.length > 0 ? `<div class="divider"></div><div style="margin:6px 0"><span class="label">Servicios:</span></div>${selectedServices.map(sv => `<div class="row"><span style="font-size:12px">${sv.name}</span><span class="value">${formatMoney(sv.basePrice, currency)}</span></div>`).join("")}<div class="divider"></div><div class="row"><span class="label"><strong>Total:</strong></span><span class="value"><strong>${formatMoney(servicesTotalPrice, currency)}</strong></span></div>` : (o.estimatedCost > 0 ? `<div class="divider"></div><div class="row"><span class="label">Costo Estimado:</span><span class="value">${formatMoney(o.estimatedCost, currency)}</span></div>` : "")}
 <div class="divider"></div>
 <div class="row"><span class="label">Fecha:</span><span class="value">${new Date(o.createdAt).toLocaleDateString("es-MX")}</span></div>
 <div class="footer"><p>Consulte el estado de su orden en línea con el número de orden mostrado arriba.</p><p>Gracias por su preferencia.</p></div>
@@ -256,7 +233,6 @@ ${o.accessories ? `<div style="display:flex;justify-content:space-between;margin
 <div style="border-top:1px dashed #ccc;margin:12px 0"></div>
 <div style="margin:6px 0"><span style="color:#666">Problema:</span></div>
 <div>${o.problemDescription}</div>
-${o.estimatedCost > 0 ? `<div style="border-top:1px dashed #ccc;margin:12px 0"></div><div style="display:flex;justify-content:space-between;margin:6px 0"><span style="color:#666">Costo Estimado:</span><span style="font-weight:bold;text-align:right">${formatMoney(o.estimatedCost, cur)}</span></div>` : ""}
 <div style="border-top:1px dashed #ccc;margin:12px 0"></div>
 <div style="display:flex;justify-content:space-between;margin:6px 0"><span style="color:#666">Fecha:</span><span style="font-weight:bold;text-align:right">${new Date(o.createdAt).toLocaleDateString("es-MX")}</span></div>
 <div style="text-align:center;color:#999;font-size:11px;margin-top:20px"><p>Consulte el estado de su orden en línea con el número de orden mostrado arriba.</p><p>Gracias por su preferencia.</p></div>
@@ -376,7 +352,7 @@ ${o.estimatedCost > 0 ? `<div style="border-top:1px dashed #ccc;margin:12px 0"><
         </div>
       )}
 
-      {localStorage.getItem('orderDraft') && (
+      {hasDraft && (
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Save className="h-4 w-4 text-blue-600 shrink-0" />
@@ -386,6 +362,7 @@ ${o.estimatedCost > 0 ? `<div style="border-top:1px dashed #ccc;margin:12px 0"><
             type="button"
             onClick={() => {
               localStorage.removeItem('orderDraft');
+              setHasDraft(false);
               window.location.reload();
             }}
             className="text-xs text-blue-600 hover:text-blue-800 underline whitespace-nowrap"
@@ -595,109 +572,6 @@ ${o.estimatedCost > 0 ? `<div style="border-top:1px dashed #ccc;margin:12px 0"><
                 rows={2}
                 className="input-field resize-none bg-yellow-50 border-yellow-200"
                 placeholder="Ej: Cliente difícil, equipo muy golpeado, etc..."
-              />
-            </div>
-            {/* Servicios */}
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <Wrench className="h-4 w-4" />
-                Servicios y Costos
-              </h4>
-              {availableServices.length > 0 ? (
-                <div className="space-y-3">
-                  <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                    <select
-                      value={selectedServiceId}
-                      onChange={(e) => setSelectedServiceId(e.target.value)}
-                      className="input-field flex-1"
-                    >
-                      <option value="">Seleccionar servicio...</option>
-                      {availableServices
-                        .filter(s => !selectedServices.find(ss => ss.id === s.id))
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name} — {formatMoneyShort(s.basePrice, currency)}
-                          </option>
-                        ))}
-                    </select>
-                    <button type="button" onClick={addService} disabled={!selectedServiceId} className="btn-primary px-3 shrink-0">
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {selectedServices.length === 0 ? (
-                    <p className="text-sm text-gray-400 py-2">Sin servicios seleccionados (opcional)</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedServices.map((svc) => (
-                        <div key={svc.id} className="flex items-center justify-between bg-purple-50 border border-purple-200 rounded-lg p-3">
-                          <div className="flex-1">
-                            <span className="text-sm font-medium text-gray-900">{svc.name}</span>
-                            <span className="text-sm text-purple-600 font-semibold ml-2">{formatMoneyShort(svc.basePrice, currency)}</span>
-                          </div>
-                          <button type="button" onClick={() => removeService(svc.id)} className="text-gray-300 hover:text-red-500 p-1">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                      <div className="flex justify-between text-sm font-medium pt-2 border-t border-gray-200">
-                        <span className="text-gray-600">Total servicios:</span>
-                        <span className="text-gray-900">{formatMoney(servicesTotalPrice, currency)}</span>
-                      </div>
-                    </div>
-                  )}
-                  {/* Resumen de costos (auto-calculado desde servicios) */}
-                  {selectedServices.length > 0 && (
-                    <div className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Cobro al cliente:</span>
-                        <span className="font-semibold text-gray-900">{formatMoney(servicesTotalPrice, currency)}</span>
-                      </div>
-                      {servicesPartsCost > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Costo de piezas:</span>
-                          <span className="text-red-600">-{formatMoney(servicesPartsCost, currency)}</span>
-                        </div>
-                      )}
-                      {servicesPartsCost > 0 && (
-                        <div className="flex justify-between text-sm pt-2 border-t border-gray-300">
-                          <span className="font-medium text-gray-700">Ganancia estimada:</span>
-                          <span className="font-bold text-green-700">{formatMoney(servicesProfit, currency)}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-xs text-gray-400">No hay servicios configurados. Puedes crearlos en <Link href="/admin/configuracion" className="text-primary-600 underline">Configuración</Link>, o ingresa el costo manualmente:</p>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Costo estimado al cliente</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">{getCurrency(currency).symbol}</span>
-                      <input
-                        type="number"
-                        name="manualCost"
-                        value={form.manualCost || ""}
-                        onChange={handleChange}
-                        className="input-field pl-10"
-                        placeholder="0"
-                        min="0"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fecha estimada de entrega
-              </label>
-              <input
-                type="date"
-                name="estimatedDelivery"
-                value={form.estimatedDelivery}
-                onChange={handleChange}
-                className="input-field"
               />
             </div>
           </div>
